@@ -1973,9 +1973,10 @@ public class FirebasePlugin extends CordovaPlugin {
 
             // Sound
             String sound = options.optString("sound", "default");
+            int usage = options.optInt("usage", AudioAttributes.USAGE_NOTIFICATION_RINGTONE);
             AudioAttributes audioAttributes = new AudioAttributes.Builder()
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build();
+                    .setUsage(usage).build();
             if ("ringtone".equals(sound)) {
                 channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), audioAttributes);
                 Log.d(TAG, "Channel "+id+" - sound=ringtone");
