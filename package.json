@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-firebasex",
-  "version": "13.0.1",
+  "version": "13.0.2-hogangnono",
   "description": "Cordova plugin for Google Firebase",
   "types": "./types/index.d.ts",
   "author": {
@@ -39,5 +39,8 @@
     "xcode": "^3.0.1",
     "xml-js": "^1.6.11",
     "semver": "^7.3.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.housefeed.com"
   }
 }
