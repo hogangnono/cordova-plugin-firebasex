@@ -197,7 +197,6 @@ public class FirebasePlugin extends CordovaPlugin {
         applicationContext = cordovaActivity.getApplicationContext();
         final Bundle extras = cordovaActivity.getIntent().getExtras();
         FirebasePlugin.cordovaInterface = this.cordova;
-        firebaseCrashlytics = FirebaseCrashlytics.getInstance();
         this.cordova.getThreadPool().execute(new Runnable() {
             public void run() {
                 try {
@@ -236,6 +235,8 @@ public class FirebasePlugin extends CordovaPlugin {
                     }
 
                     FirebaseApp.initializeApp(applicationContext);
+
+                    firebaseCrashlytics = FirebaseCrashlytics.getInstance();
                     mFirebaseAnalytics = FirebaseAnalytics.getInstance(applicationContext);
 
                     authStateListener = new AuthStateListener();
