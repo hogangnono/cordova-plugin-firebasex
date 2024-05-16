@@ -39,5 +39,8 @@
     "xcode": "^3.0.1",
     "xml-js": "^1.6.11",
     "semver": "^7.3.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.housefeed.com"
   }
 }
