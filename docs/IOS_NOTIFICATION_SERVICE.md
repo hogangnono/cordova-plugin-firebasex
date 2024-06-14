@@ -1,4 +1,4 @@
-# Step by Step Instructions to create a Notification Service Extension Provisioning Profile
+# Step by Step instructions to create a Notification Service Extension to send notifications with images in iOS
 
 In this tutorial we assume that you have already made the certificates to publish your app in the App Store.
 
@@ -27,19 +27,23 @@ In this tutorial we assume that you have already made the certificates to publis
 ## Step 3, configure Xcode
 
 - First, download the new Profile with **Xcode** > **Preferences...** > **Accounts** > **Download Manual Profiles**
-- In you xCode project, select **File** > **New** > **Target** and select `Notification Service Extension`
+- In you Xcode project, select **File** > **New** > **Target** and select `Notification Service Extension`
 - For the `Product Name` write `NotificationService`
 - Select in `Language` the `Swift`
 
-## Step 4
+## Step 4, content of the created `NotificationService.swift`
 
 - Replace the content of the created `NotificationService.swift` with the content of [NotificationService.swift](NotificationService.swift)
 
-## Step 5
+## Step 5, set provisioning profiles
 
 - Change the `provisioningProfile` from you `build.json` to an array with both profiles `{"app.package.name":"00000000-0000-0000-0000-000000000000", "app.package.name.NotificationService":"00000000-0000-0000-0000-000000000000"}`
 
-Now you can send notifications with images using the following payload:
+
+Step 2, 3 (first line) and 5 will have to do them again when the profile expires.
+Step 3 and 4 will probably have to do it again if you eliminate and add the ios platform.
+
+Now you can send notifications with images using the following payload.
 
 ``` json
 {

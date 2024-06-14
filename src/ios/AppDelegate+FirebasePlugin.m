@@ -1,6 +1,6 @@
 #import "AppDelegate+FirebasePlugin.h"
 #import "FirebasePlugin.h"
-#import "Firebase.h"
+#import "FirebaseWrapper.h"
 #import <objc/runtime.h>
 
 
@@ -23,8 +23,13 @@ static AppDelegate* instance;
 }
 
 static NSDictionary* mutableUserInfo;
+
 static FIRAuthStateDidChangeListenerHandle authStateChangeListener;
 static bool authStateChangeListenerInitialized = false;
+
+static FIRIDTokenDidChangeListenerHandle authIdTokenChangeListener;
+static NSString* currentIdToken = @"";
+
 static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterDelegate = nil;
 
 + (void)load {
@@ -98,6 +103,35 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                 }
             }@catch (NSException *exception) {
                 [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
+            }
+        }];
+        
+        authIdTokenChangeListener = [[FIRAuth auth] addIDTokenDidChangeListener:^(FIRAuth * _Nonnull auth, FIRUser * _Nullable user) {
+            @try {
+                if(![FIRAuth auth].currentUser){
+                    [FirebasePlugin.firebasePlugin executeGlobalJavascript:@"FirebasePlugin._onAuthIdTokenChange()"];
+                    return;
+                }
+                FIRUser* user = [FIRAuth auth].currentUser;
+                [user getIDTokenWithCompletion:^(NSString * _Nullable token, NSError * _Nullable error) {
+                    if(error == nil){
+                        
+                        
+                        if([token isEqualToString:currentIdToken]) return;;
+                        currentIdToken = token;
+                        [user getIDTokenResultWithCompletion:^(FIRAuthTokenResult * _Nullable tokenResult, NSError * _Nullable error) {
+                            if(error == nil){
+                                [FirebasePlugin.firebasePlugin executeGlobalJavascript:[NSString stringWithFormat:@"FirebasePlugin._onAuthIdTokenChange({\"idToken\": \"%@\", \"providerId\": \"%@\"})", token, tokenResult.signInProvider]];
+                            }else{
+                                [FirebasePlugin.firebasePlugin executeGlobalJavascript:[NSString stringWithFormat:@"FirebasePlugin._onAuthIdTokenChange({\"idToken\": \"%@\"})", token]];
+                            }
+                        }];
+                    }else{
+                        [FirebasePlugin.firebasePlugin executeGlobalJavascript:@"FirebasePlugin._onAuthIdTokenChange()"];
+                    }
+                }];
+            }@catch (NSException *exception) {
+                [FirebasePlugin.firebasePlugin executeGlobalJavascript:@"FirebasePlugin._onAuthIdTokenChange()"];
             }
         }];
 
@@ -489,6 +523,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                     NSMutableDictionary* result = [[NSMutableDictionary alloc] init];
                     [result setValue:@"true" forKey:@"instantVerification"];
                     [result setValue:key forKey:@"id"];
+                    [result setValue:idToken forKey:@"idToken"];
                     if(appleIDCredential.fullName != nil){
                         if(appleIDCredential.fullName.givenName != nil){
                             [result setValue:appleIDCredential.fullName.givenName forKey:@"givenName"];
