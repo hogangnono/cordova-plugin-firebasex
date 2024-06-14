@@ -31,7 +31,8 @@ To help ensure this plugin is kept updated, new features are added and bugfixes 
     - [Ionic 4+](#ionic-4)
     - [Ionic 3](#ionic-3)
 - [Build environment notes](#build-environment-notes)
-  - [PhoneGap Build](#phonegap-build)
+  - [Remote Cloud Build](#remote-cloud-build)
+  - [Capacitor support](#capacitor-support)
   - [Android-specific](#android-specific)
     - [Specifying Android library versions](#specifying-android-library-versions)
     - [AndroidX](#androidx)
@@ -55,25 +56,19 @@ To help ensure this plugin is kept updated, new features are added and bugfixes 
     - [Android background notifications](#android-background-notifications)
     - [Android foreground notifications](#android-foreground-notifications)
     - [Android Notification Channels](#android-notification-channels)
-      - [Android 7 and below](#android-7-and-below)
     - [Android Notification Icons](#android-notification-icons)
-      - [Android Default Notification Icon](#android-default-notification-icon)
-      - [Android Large Notification Icon](#android-large-notification-icon)
-      - [Android Custom Notification Icons](#android-custom-notification-icons)
     - [Android Notification Color](#android-notification-color)
     - [Android Notification Sound](#android-notification-sound)
-      - [Android 8.0 and above](#android-80-and-above)
-      - [On Android 7 and below](#on-android-7-and-below)
     - [Android cloud message types](#android-cloud-message-types)
   - [iOS notifications](#ios-notifications)
     - [iOS background notifications](#ios-background-notifications)
     - [iOS notification sound](#ios-notification-sound)
+    - [iOS critical notifications](#ios-critical-notifications)
     - [iOS badge number](#ios-badge-number)
     - [iOS actionable notifications](#ios-actionable-notifications)
+    - [iOS notification settings button](#ios-notification-settings-button)
   - [Data messages](#data-messages)
     - [Data message notifications](#data-message-notifications)
-      - [Android data message notifications](#android-data-message-notifications)
-      - [iOS data message notifications](#ios-data-message-notifications)
   - [Custom FCM message handling](#custom-fcm-message-handling)
     - [Android](#android)
     - [iOS](#ios)
@@ -91,9 +86,12 @@ To help ensure this plugin is kept updated, new features are added and bugfixes 
     - [onTokenRefresh](#ontokenrefresh)
     - [getAPNSToken](#getapnstoken)
     - [onApnsTokenReceived](#onapnstokenreceived)
+    - [onOpenSettings](#onopensettings)
     - [onMessageReceived](#onmessagereceived)
     - [grantPermission](#grantpermission)
+    - [grantCriticalPermission](#grantcriticalpermission)
     - [hasPermission](#haspermission)
+    - [hasCriticalPermission](#hascriticalpermission)
     - [unregister](#unregister)
     - [isAutoInitEnabled](#isautoinitenabled)
     - [setAutoInitEnabled](#setautoinitenabled)
@@ -131,6 +129,7 @@ To help ensure this plugin is kept updated, new features are added and bugfixes 
     - [updateUserProfile](#updateuserprofile)
     - [updateUserEmail](#updateuseremail)
     - [sendUserEmailVerification](#senduseremailverification)
+    - [verifyBeforeUpdateEmail](#verifybeforeupdateemail)
     - [updateUserPassword](#updateuserpassword)
     - [sendUserPasswordResetEmail](#senduserpasswordresetemail)
     - [deleteUser](#deleteuser)
@@ -139,19 +138,22 @@ To help ensure this plugin is kept updated, new features are added and bugfixes 
     - [signInUserWithCustomToken](#signinuserwithcustomtoken)
     - [signInUserAnonymously](#signinuseranonymously)
     - [verifyPhoneNumber](#verifyphonenumber)
-      - [Android](#android-2)
-      - [iOS](#ios-2)
+    - [enrollSecondAuthFactor](#enrollsecondauthfactor)
+    - [verifySecondAuthFactor](#verifysecondauthfactor)
+    - [listEnrolledSecondAuthFactors](#listenrolledsecondauthfactors)
+    - [unenrollSecondAuthFactor](#unenrollsecondauthfactor)
     - [setLanguageCode](#setlanguagecode)
     - [authenticateUserWithEmailAndPassword](#authenticateuserwithemailandpassword)
     - [authenticateUserWithGoogle](#authenticateuserwithgoogle)
-      - [Android](#android-3)
     - [authenticateUserWithApple](#authenticateuserwithapple)
-      - [iOS](#ios-3)
-      - [Android](#android-4)
+    - [authenticateUserWithMicrosoft](#authenticateuserwithmicrosoft)
+    - [authenticateUserWithFacebook](#authenticateuserwithfacebook)
     - [signInWithCredential](#signinwithcredential)
     - [linkUserWithCredential](#linkuserwithcredential)
     - [reauthenticateWithCredential](#reauthenticatewithcredential)
     - [registerAuthStateChangeListener](#registerauthstatechangelistener)
+    - [useAuthEmulator](#useauthemulator)
+    - [getClaims](#getclaims)
   - [Remote Config](#remote-config)
     - [fetch](#fetch)
     - [activateFetched](#activatefetched)
@@ -208,6 +210,7 @@ Note that these must be set at plugin installation time. If you wish to change p
 - `FIREBASE_ANALYTICS_COLLECTION_ENABLED` - whether to automatically enable Firebase Analytics data collection on app startup
 - `FIREBASE_PERFORMANCE_COLLECTION_ENABLED` - whether to automatically enable Firebase Performance data collection on app startup
 - `FIREBASE_CRASHLYTICS_COLLECTION_ENABLED` - whether to automatically enable Firebase Crashlytics data collection on app startup
+- `FIREBASE_FCM_AUTOINIT_ENABLED` - whether to automatically enable FCM registration on app startup
 See [Disable data collection on startup](#disable-data-collection-on-startup) for more info.
 
 ### Android only
@@ -237,8 +240,19 @@ See [Specifying Android library versions](#specifying-android-library-versions) 
     - e.g.  `--variable ANDROID_FIREBASE_PERFORMANCE_MONITORING=true`
     - Defaults to `false` if not specified.
 - `ANDROID_FIREBASE_PERF_GRADLE_PLUGIN_VERSION` - overrides the default version of the [Firebase Performance Monitoring Gradle plugin for Android](https://firebase.google.com/docs/perf-mon/get-started-android?authuser=0#add-perfmon-plugin)
+- `ANDROID_GRPC_OKHTTP` - sets version of GRPC OKHTTP library.
 
 ### iOS only
+- `IOS_FIREBASE_SDK_VERSION` - a specific version of the Firebase iOS SDK to set in the Podfile
+  - If not specified, the default version defined in `<pod>` elements in the `plugin.xml` will be used.
+- `IOS_GOOGLE_SIGIN_VERSION` - a specific version of the Google Sign In library to set in the Podfile
+  - If not specified, the default version defined in the `<pod>` element in the `plugin.xml` will be used.
+- `IOS_GOOGLE_TAG_MANAGER_VERSION` - a specific version of the Google Tag Manager library to set in the Podfile
+  - If not specified, the default version defined in the `<pod>` element in the `plugin.xml` will be used.
+- `IOS_USE_PRECOMPILED_FIRESTORE_POD` - if `true`, switches Podfile to use a [pre-compiled version of the Firestore pod](https://github.com/invertase/firestore-ios-sdk-frameworks.git) to reduce build time
+  - Since some users experienced long build times due to the Firestore pod (see [#407](https://github.com/dpa99c/cordova-plugin-firebasex/issues/407))
+  - However other users have experienced build issues with the pre-compiled version (see [#735](https://github.com/dpa99c/cordova-plugin-firebasex/issues/735))
+  - Defaults to `false` if not specified.
 - `IOS_STRIP_DEBUG` - prevents symbolification of all libraries included via Cocoapods. See [Strip debug symbols](#strip-debug-symbols) for more info.
     - e.g.  `--variable IOS_STRIP_DEBUG=true`
     - Defaults to `false` if not specified.
@@ -255,15 +269,24 @@ See [Specifying Android library versions](#specifying-android-library-versions) 
 - `IOS_ENABLE_APPLE_SIGNIN` - enables the Sign In with Apple capability in Xcode.
     - `--variable IOS_ENABLE_APPLE_SIGNIN=true`
     - Ensure the associated app provisioning profile also has this capability enabled.
+- `IOS_ENABLE_CRITICAL_ALERTS_ENABLED` - enables the critical alerts capability
+  - `--variable IOS_ENABLE_CRITICAL_ALERTS_ENABLED=true`
+  - See [iOS critical notifications](#ios-critical-notifications)
+  - Ensure the associated app provisioning profile also has this capability enabled.
+- `IOS_FCM_ENABLED` - allows to completely disable push notifications functionality of the plugin (not just the automatic initialization that is covered by `FIREBASE_FCM_AUTOINIT_ENABLED` variable).
+  - Defaults to `true`, if not specified; i.e. FCM is enabled by default.
+  - This can be handy if you are using this plugin for e.g. Crashlytics and handle push notifications using another plugin. Use `--variable IOS_FCM_ENABLED=false` in this case.
 
 ## Supported Cordova Versions
-- cordova: `>= 9`
-- cordova-android: `>= 9`
+- cordova: `>= 10`
+- cordova-android: `>= 10`
 - cordova-ios: `>= 6`
 
 ## Supported Mobile Platform Versions
-- Android `>= 4.1`
-- iOS `>= 10.0`
+The supported versions of Android and iOS depend on the version of the Firebase SDK included in the build.
+
+See the Firebase [iOS](https://firebase.google.com/support/release-notes/ios) and [Android](https://firebase.google.com/support/release-notes/android) release notes to determine the minimum support OS versions for the SDK version included in your build.
+If you didn't explicity specify a version for the Firebase SDK using plugin variables at plugin installation time, you can find the current default version in the plugin's `plugin.xml`.
 
 ## Migrating from cordova-plugin-firebase
 This plugin is a fork of [cordova-plugin-firebase](https://github.com/arnesson/cordova-plugin-firebase) which has been reworked to fix issues and add new functionality.
@@ -282,9 +305,9 @@ Therefore you can no longer directly substitute `cordova-plugin-firebasex` in pl
 
 You should be aware of the following breaking changes compared with `cordova-plugin-firebase`:
 * Minimum supported Cordova versions
-    * `cordova@9` (CLI)
-    * `cordova-android@8` (Android platform)
-    * `cordova-ios@5` (iOS platform)
+    * `cordova@10` (CLI)
+    * `cordova-android@10` (Android platform)
+    * `cordova-ios@6` (iOS platform)
 * Migrated to AndroidX from legacy Android Support Library
 * Migrated to Cocoapods to satisfy Firebase SDK dependencies on iOS
 * `onNotificationOpen()` renamed to `onMessageReceived()`
@@ -372,8 +395,22 @@ See the [cordova-plugin-firebasex-ionic3-test](https://github.com/dpa99c/cordova
 
 # Build environment notes
 
-## PhoneGap Build
-This plugin will not work with Phonegap Build (and other remote cloud build envs) do not support Cordova hook scripts as they are used by this plugin to configure the native platform projects.
+## Remote Cloud Build
+This plugin **will not work** with remote cloud build services that do not support Cordova hook scripts (e.g. [Ionic Appflow](https://ionic.io/appflow)).
+The hook scripts used by this plugin are essential to configure the native platform projects for use with the Firebase SDK and therefore if they are not executed, the plugin will not work correctly: either the build will fail or the app containing the plugin will crash at runtime.
+
+Even if the remote build service supports Cordova hook scripts, it is hard to diagnose the cause of build issue because the environment is not under your direct control.
+Therefore a **local build environment** is highly recommended since you have full control and the ability to update/upgrade any components in the OS.
+Support for using this plugin can only be offered when building projects in a local environment. (i.e. your own development machine).
+
+However if you are unable to build locally and therefore must use a remote build environment, then [VoltBuilder](https://volt.build/) is recommended for use with this plugin as it supports Cordova hook scripts and its developers have explicitly tested building with this plugin to ensure compatibility.
+
+
+
+## Capacitor support
+This plugin **does not currently support [Capacitor](https://capacitorjs.com/)**. If you want to use Firebase with Capacitor, you should use [Capacitor Firebase](https://github.com/capawesome-team/capacitor-firebase) or the [Firebase JS SDK](https://firebase.google.com/docs/web/setup) instead.
+
+This plugin is designed to work with Cordova therefore relies on Cordova features such as hook scripts, plugin variables and project structure in order to manipulate the native platform projects for use with the Firebase SDK.
 
 ## Android-specific
 
@@ -464,13 +501,16 @@ This plugin pins specific versions of these in [its `plugin.xml`](https://github
 
     <pod name="Firebase/Core" spec="6.3.0"/>
 
-**It is currently not possible to override these at plugin installation time** because `cordova@9`/`cordova-ios@5` does not support the use of plugin variables in the `<pod>`'s `spec` attribute.
-Therefore if you need to change the specified versions, you'll currently need to do this by forking the plugin and editing the `plugin.xml` to change the specified `spec` values.
+Cordova does not natively support the use of plugin variables in the `<pod>`'s `spec` attribute, however this plugin uses a hook script to enable this behaviour by overriding the version specified in `plugin.xml` directly within the `Podfile`.
+Therefore to override the version of the Firebase iOS SDK components set in the `plugin.xml`, you should define it using the `IOS_FIREBASE_SDK_VERSION` plugin variable when installing the plugin into your project.
+For example:
+
+    cordova plugin add cordova-plugin-firebasex --variable IOS_FIREBASE_SDK_VERSION=9.1.0
 
 ### Cocoapods
-This plugin relies on `cordova@9`/`cordova-ios@5` support for the [CocoaPods dependency manager]( https://cocoapods.org/) in order to satisfy the iOS Firebase SDK library dependencies.
+This plugin relies on Cordova support for the [CocoaPods dependency manager]( https://cocoapods.org/) in order to satisfy the iOS Firebase SDK library dependencies.
 
-Please make sure you have `cocoapods@>=1.10` installed in your iOS build environment - setup instructions can be found [here](https://cocoapods.org/).
+Please make sure you have `cocoapods@>=1.11.2` installed in your iOS build environment - setup instructions can be found [here](https://cocoapods.org/).
 
 If building your project in Xcode, you need to open `YourProject.xcworkspace` (not `YourProject.xcodeproj`) so both your Cordova app project and the Pods project will be loaded into Xcode.
 
@@ -612,11 +652,12 @@ Before [opening a bug issue](https://github.com/dpa99c/cordova-plugin-firebasex/
     - Ask for help on StackOverflow, Ionic Forums, etc.
     - Use the [example project](https://github.com/dpa99c/cordova-plugin-firebasex-test) as a known working reference
     - Any issues requesting support will be closed immediately.
-- *DO NOT* open issues related to the  [Ionic Typescript wrapper for this plugin](https://github.com/ionic-team/ionic-native/blob/master/src/%40ionic-native/plugins/firebase-x/index.ts)
+- *DO NOT* open issues related to the  [Ionic Typescript wrapper for this plugin](https://github.com/ionic-team/ionic-native/blob/master/src/%40awesome-cordova-plugins/plugins/firebase-x/index.ts)
     - This is owned/maintained by [Ionic](https://github.com/ionic-team) and is not part of this plugin
     - Please raise such issues/PRs against [Ionic Native](https://github.com/ionic-team/ionic-native/) instead.
 	- To verify an if an issue is caused by this plugin or its Typescript wrapper, please re-test using the vanilla Javascript plugin interface (without the Ionic Native wrapper).
 	- Any issue opened here which is obviously an Ionic Typescript wrapper issue will be closed immediately.
+- *DO NOT* open issues related to [Remote Cloud Build](#remote-cloud-build) environments such as [Ionic Appflow](https://ionic.io/appflow) as these are not supported
 - If you are migrating from [cordova-plugin-firebase](https://github.com/arnesson/cordova-plugin-firebase) to `cordova-plugin-firebasex` please make sure you have read the [Migrating from cordova-plugin-firebase](#migrating-from-cordova-plugin-firebase) section.
 - Read the above documentation thoroughly
     - For example, if you're having a build issue ensure you've read through the [build environment notes](#build-environment-notes)
@@ -628,10 +669,11 @@ Before [opening a bug issue](https://github.com/dpa99c/cordova-plugin-firebasex/
     - Choose the "Bug report" template
     - Fill out the relevant sections of the template and delete irrelevant sections
     - *WARNING:* Failure to complete the issue template will result in the issue being closed immediately.
-- Reproduce the issue using the [example project](https://github.com/dpa99c/cordova-plugin-firebasex-test)
+- **Reproduce the issue using the [example project](https://github.com/dpa99c/cordova-plugin-firebasex-test)**
 	- This will eliminate bugs in your code or conflicts with other code as possible causes of the issue
 	- This will also validate your development environment using a known working codebase
 	- If reproducing the issue using the example project is not possible, create an isolated test project that you are able to share
+  - **Support cannot be offered to help resolve build issues in your own project.**
 - Include full verbose console output when reporting build issues
     - If the full console output is too large to insert directly into the Github issue, then post it on an external site such as [Pastebin](https://pastebin.com/) and link to it from the issue
     - Often the details of an error causing a build failure is hidden away when building with the CLI
@@ -1154,6 +1196,11 @@ In a data message, specify the `notification_ios_sound` key in the `data` sectio
 }
 ```
 
+### iOS critical notifications
+iOS offers the option to send critical push notifications. These kind of notifications appear even when your iPhone or iPad is in Do Not Disturb mode or silenced. Sending critical notifications requires a special entitlement that needs to be issued by Apple.
+Use the pugin setting `IOS_ENABLE_CRITICAL_ALERTS_ENABLED=true` to enable the critical push notifications capability.
+A user also needs to explicitly [grant permission](#grantcriticalpermission) to receive critical alerts.
+
 ### iOS badge number
 In a notification message, specify the `badge` key in the `apns.payload.aps` section, for example:
 
@@ -1321,11 +1368,24 @@ On Android:
 
 The following Android-specific keys are supported and should be placed inside the `data` section:
 
+- `notification_android_id` - Identifier used to replace existing notifications in the notification drawer
+    - If not specified, each request creates a new notification.
+    - If specified and a notification with the same tag is already being shown, the new notification replaces the existing one in the notification drawer.
+- `notification_android_body_html` - If is passed, the body of a notification is processed as if it were html, you can use `<b>, <i> or <s>`
+    - If not specified, the body of the notification will be processed as plain text.
 - `notification_android_icon` - name of a [custom notification icon](#android-custom-notification-icons) in the drawable resources
     - if not specified, the plugin will use the default `notification_icon` if it exists; otherwise the default app icon will be displayed
     - if a [large icon](#android-large-notification-icon) has been defined, it will also be displayed in the system notification.
 - `notification_android_color` - the [color accent](#android-notification-color) to use for the small notification icon
     - if not specified, the default color accent will be used
+- `notification_android_image` - Specifies the image notification
+    - if not specified, the notification will not show any image
+- `notification_android_image_type` - Specifies the image notification type
+    - Possible values:
+        - `square` - The image is displayed in the default format.
+        - `circle` - This notification displays the image in circular format.
+        - `big_picture` - Displays the image like `square` type, but the notification can be expanded and show the image in a big picture, example: https://developer.android.com/training/notify-user/expanded#image-style
+    - Defaults to `square` if not specified.
 - `notification_android_channel_id` - ID of the [notification channel](#android-notification-channels) to use to display the notification
     - Only applies to Android 8.0 and above
     - If not specified, the [default notification channel](#default-android-channel-properties) will be used.
@@ -1379,6 +1439,8 @@ Example data message with Android notification keys:
     "notification_android_visibility": "1",
     "notification_android_color": "#ff0000",
     "notification_android_icon": "coffee",
+    "notification_android_image": "https://example.com/avatar.jpg",
+    "notification_android_image_type": "circle",
     "notification_android_sound": "my_sound",
     "notification_android_vibrate": "500, 200, 500",
     "notification_android_lights": "#ffff0000, 250, 250"
@@ -1398,6 +1460,9 @@ The following iOS-specific keys are supported and should be placed inside the `d
     - To play the default notification sound, set `"sound": "default"`.
     - To display a silent notification (no sound), omit the `sound` key from the message.
 - `notification_ios_badge` - Badge number to display on app icon on home screen.
+- `notification_ios_image_jpg` - Specifies the `jpg` image notification, to use this you need to have configured the `NotificationService` - [Tutorial to set it up](docs/IOS_NOTIFICATION_SERVICE.md)
+- `notification_ios_image_png` - Specifies the `png` image notification, to use this you need to have configured the `NotificationService` - [Tutorial to set it up](docs/IOS_NOTIFICATION_SERVICE.md)
+- `notification_ios_image_gif` - Specifies the `gif` image notification, to use this you need to have configured the `NotificationService` - [Tutorial to set it up](docs/IOS_NOTIFICATION_SERVICE.md)
 
 For example:
 ```json
@@ -1408,7 +1473,8 @@ For example:
     "notification_body" : "Notification body",
     "notification_title": "Notification title",
     "notification_ios_sound": "my_sound.caf",
-    "notification_ios_badge": 1
+    "notification_ios_badge": 1,
+    "notification_ios_image_png": "https://example.com/avatar.png"
   }
 }
 ```
@@ -1625,23 +1691,48 @@ Data message flow:
     b. If the data message contains the [data message notification keys](#data-message-notifications), the plugin will display a system notification for the data message while in the background.
 
 ### grantPermission
-Grant permission to receive push notifications (will trigger prompt) and return `hasPermission: true`.
-iOS only (Android will always return true).
+Grant run-time permission to receive push notifications (will trigger user permission prompt).
+iOS & Android 13+ (Android <= 12 will always return true).
+
+On Android, the `POST_NOTIFICATIONS` permission must be added to the `AndroidManifest.xml` file by inserting the following into your `config.xml` file:
+
+```xml
+<config-file target="AndroidManifest.xml" parent="/*">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</config-file>
+```
 
 **Parameters**:
 - {function} success - callback function which will be passed the {boolean} permission result as an argument
 - {function} error - callback function which will be passed a {string} error message as an argument
-- {boolean} requestWithProvidesAppNotificationSettings - boolean which indicates if app provides AppNotificationSettingsButton (**iOS12+ only**)
+- {boolean} requestWithProvidesAppNotificationSettings - (**iOS12+ only**) indicates if app provides AppNotificationSettingsButton
 
 ```javascript
 FirebasePlugin.grantPermission(function(hasPermission){
-    console.log("Permission was " + (hasPermission ? "granted" : "denied"));
+    console.log("Notifications permission was " + (hasPermission ? "granted" : "denied"));
 });
 ```
+
+### grantCriticalPermission
+Grant critical permission to receive critical push notifications (will trigger additional prompt).
+iOS 12.0+ only (Android will always return true).
+
+**Parameters**:
+- {function} success - callback function which will be passed the {boolean} permission result as an argument
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+**Critical push notifications require a special entitlement that needs to be issued by Apple.**
+
+```javascript
+FirebasePlugin.grantCriticalPermission(function(hasPermission){
+    console.log("Critical notifications permission was " + (hasPermission ? "granted" : "denied"));
+});
+```
+
 ### hasPermission
 Check permission to receive push notifications and return the result to a callback function as boolean.
-On iOS, returns true is runtime permission for remote notifications is granted and enabled in Settings.
-On Android, returns true if remote notifications are enabled.
+On iOS, returns true if runtime permission for remote notifications is granted and enabled in Settings.
+On Android, returns true if global remote notifications are enabled in the device settings and (on Android 13+) runtime permission for remote notifications is granted.
 
 **Parameters**:
 - {function} success - callback function which will be passed the {boolean} permission result as an argument
@@ -1653,12 +1744,32 @@ FirebasePlugin.hasPermission(function(hasPermission){
 });
 ```
 
+### hasCriticalPermission
+Check permission to receive critical push notifications and return the result to a callback function as boolean.
+iOS 12.0+ only (Android will always return true).
+
+**Critical push notifications require a special entitlement that needs to be issued by Apple.**
+
+**Parameters**:
+- {function} success - callback function which will be passed the {boolean} permission result as an argument
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+```javascript
+FirebasePlugin.hasCriticalPermission(function(hasPermission){
+    console.log("Permission to send critical push notifications is " + (hasPermission ? "granted" : "denied"));
+});
+```
+
 ### unregister
-Unregisters from Firebase by deleting the current device token.
+Unregisters from Firebase Cloud Messaging by deleting the current FCM device token.
 Use this to stop receiving push notifications associated with the current token.
 e.g. call this when you logout user from your app.
 By default, a new token will be generated as soon as the old one is removed.
-To prevent a new token being generated, by sure to disable autoinit using [`setAutoInitEnabled()`](#setautoinitenabled) before calling [`unregister()`](#unregister).
+To prevent a new token being generated, be sure to disable autoinit using [`setAutoInitEnabled()`](#setautoinitenabled) before calling [`unregister()`](#unregister).
+
+You can disable autoinit on first run and therefore prevent an FCM token being allocated by default (allowing user opt-in) by setting the `FIREBASE_FCM_AUTOINIT_ENABLED` plugin variable at plugin installation time:
+
+    cordova plugin add cordova-plugin-firebasex --variable FIREBASE_FCM_AUTOINIT_ENABLED=false
 
 **Parameters**: None
 
@@ -1846,7 +1957,15 @@ var channel  = {
     //-1 - secret - Do not reveal any part of the notification on a secure lockscreen.
     //0 - private - Show the notification on all lockscreens, but conceal sensitive or private information on secure lockscreens.
     //1 - public - Show the notification in its entirety on all lockscreens.
-    visibility: 1
+    visibility: 1,
+
+    // Optionally specify the usage type of the notification. Defaults to USAGE_NOTIFICATION_RINGTONE ( =6)
+    // For a list of all possible usages, see https://developer.android.com/reference/android/media/AudioAttributes.Builder#setUsage(int)
+
+    usage: 6,
+    // Optionally specify the stream type of the notification channel.
+    // For a list of all possible values, see https://developer.android.com/reference/android/media/AudioAttributes.Builder#setLegacyStreamType(int)
+    streamType: 5,
 };
 
 // Create the channel
@@ -2086,8 +2205,8 @@ FirebasePlugin.setUserId("user_id");
 Set a user property for use in Analytics:
 
 **Parameters**:
-- {string} userName - name of user property to set in Firebase Analytics
-- {string} userName - value of user property to set in Firebase Analytics
+- {string} name - name of user property to set in Firebase Analytics
+- {string} value - value of user property to set in Firebase Analytics
 
 ```javascript
 FirebasePlugin.setUserProperty("name", "value");
@@ -2220,6 +2339,7 @@ In a Cordova app, you may use this to log unhandled Javascript exceptions, for e
 
 The event will appear under `Event type = "Non-fatals"` in the Crashlytics console.
 The error message will appear in the `Logs` section of the non-fatal error event.
+Note that logged errors will only be sent to the Crashlytics server on the next full app restart.
 Also logs the error message to the native device console.
 
 **Parameters**:
@@ -2326,6 +2446,17 @@ Note that some user properties will be empty is they are not defined in Firebase
         console.log("UID: "+user.uid);
         console.log("Provider ID: "+user.providerId);
         console.log("ID token: "+user.idToken);
+        console.log("creationTime", user.creationTimestamp);
+        console.log("lastSignInTime", user.lastSignInTimestamp);
+
+        for(var i = 0; i < user.providers.length; i++){
+            console.log("providerId", user.providers[i].providerId);
+            console.log("uid", user.providers[i].uid);
+            console.log("displayName", user.providers[i].displayName);
+            console.log("email", user.providers[i].email);
+            console.log("phoneNumber", user.providers[i].phoneNumber);
+            console.log("photoUrl", user.providers[i].photoUrl);
+        }
     }, function(error) {
         console.error("Failed to get current user data: " + error);
     });
@@ -2377,10 +2508,10 @@ Updates the display name and/or photo URL of the current Firebase user signed in
 ```
 
 ### updateUserEmail
-Updates/sets the email address of the current Firebase user signed into the app.
+Updates/sets the email address of the current Firebase user signed in to the app.
 
 **Parameters**:
-- {string} email - email address of user
+- {string} email - email address of user to set as current
 - {function} success - callback function to call on success
 - {function} error - callback function which will be passed a {string} error message as an argument
 
@@ -2397,14 +2528,49 @@ Sends a verification email to the currently configured email address of the curr
 When the user opens the contained link, their email address will have been verified.
 
 **Parameters**:
+- {object} actionCodeSettings - action code settings based on [Passing State in Email Actions Parameters](https://firebase.google.com/docs/auth/web/passing-state-in-email-actions#passing_statecontinue_url_in_email_actions) :
+    - {boolean} handleCodeInApp - Whether the email action link will be opened in a mobile app or a web link first
+    - {string} url - Continue URL after email has been verified
+    - {string} dynamicLinkDomain - Sets the dynamic link domain to use for the current link if it is to be opened using Firebase Dynamic Links
+    - {string} iosBundleId - Sets the iOS bundle ID. This will try to open the link in an iOS app if it is installed
+    - {string} androidPackageName - Sets the Android package name. This will try to open the link in an android app if it is installed
+    - {boolean} installIfNotAvailable - Install if the provided app package name is not already installed on the users device (Android only)
+    - {string} minimumVersion - minimum app version required (Android Only)
 - {function} success - callback function to call on success
 - {function} error - callback function which will be passed a {string} error message as an argument
 
 ```javascript
-    FirebasePlugin.sendUserEmailVerification(function() {
-        console.log("User verification email successfully sent");
+    FirebasePlugin.sendUserEmailVerification({
+    handleCodeInApp: true,
+    url: "http://www.example.com",
+    dynamicLinkDomain: "example.page.link",
+    iosBundleId: "com.example.ios",
+    androidPackageName: "com.example.android",
+    installIfNotAvailable: true,
+    minimumVersion: "12",
+}, function() {
+    console.log("User verification email successfully sent");
+}, function(error) {
+    console.error("Failed to send user verification email: " + error);
+});
+```
+
+### verifyBeforeUpdateEmail
+First verifies the user's identity, then set/supdates the email address of the current Firebase user signed in to the app.
+- This is required when a user with multi-factor authentication enabled on their account wishes to change their registered email address.
+    - [updateUserEmail](#updateuseremail) cannot be used and will result in an error.
+- See [the Firebase documentation](https://cloud.google.com/identity-platform/docs/work-with-mfa-users#updating_a_users_email) regarding updating the email address of a user with multi-factor authentication enabled.
+
+**Parameters**:
+- {string} email - email address of user to set as current
+- {function} success - callback function to call on success
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+```javascript
+    FirebasePlugin.verifyBeforeUpdateEmail("user@somewhere.com",function() {
+        console.log("User verified and email successfully updated");
     }, function(error) {
-        console.error("Failed to send user verification email: " + error);
+        console.error("Failed to verify user/update user email: " + error);
     });
 ```
 
@@ -2464,7 +2630,9 @@ If account creation is successful, user will be automatically signed in.
 - {string} email - user email address. It is the responsibility of the app to ensure this is a valid email address.
 - {string} password - user password. It is the responsibility of the app to ensure the password is suitable.
 - {function} success - callback function to call on success
-- {function} error - callback function which will be passed a {string} error message as an argument
+- {function} error - callback function which will be passed a {string} error message as an argument.
+    - If the error is due to the user account requiring multi-factor authentication, a second {array} argument will be passed containing a list of enrolled factors.
+        - A factor should be selected and used for second factor verification - see [verifySecondAuthFactor](#verifysecondauthfactor) for more on this.
 
 Example usage:
 
@@ -2472,8 +2640,12 @@ Example usage:
     FirebasePlugin.createUserWithEmailAndPassword(email, password, function() {
         console.log("Successfully created email/password-based user account");
         // User is now signed in
-    }, function(error) {
-        console.error("Failed to create email/password-based user account", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to create email/password-based user account", error);
+        }
     });
 ```
 
@@ -2485,6 +2657,8 @@ Signs in to an email/password-based user account.
 - {string} password - user password
 - {function} success - callback function to call on success
 - {function} error - callback function which will be passed a {string} error message as an argument
+    - If the error is due to the user account requiring multi-factor authentication, a second {array} argument will be passed containing a list of enrolled factors.
+            - A factor should be selected and used for second factor verification - see [verifySecondAuthFactor](#verifysecondauthfactor) for more on this.
 
 Example usage:
 
@@ -2492,8 +2666,12 @@ Example usage:
     FirebasePlugin.signInUserWithEmailAndPassword(email, password, function() {
         console.log("Successfully signed in");
         // User is now signed in
-    }, function(error) {
-        console.error("Failed to sign in", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to sign in", error);
+        }
     });
 ```
 
@@ -2504,6 +2682,8 @@ Signs in user with custom token.
 - {string} customToken - the custom token
 - {function} success - callback function to call on success
 - {function} error - callback function which will be passed a {string} error message as an argument
+    - If the error is due to the user account requiring multi-factor authentication, a second {array} argument will be passed containing a list of enrolled factors.
+            - A factor should be selected and used for second factor verification - see [verifySecondAuthFactor](#verifysecondauthfactor) for more on this.
 
 Example usage:
 
@@ -2511,8 +2691,12 @@ Example usage:
     FirebasePlugin.signInUserWithCustomToken(customToken, function() {
         console.log("Successfully signed in");
         // User is now signed in
-    }, function(error) {
-        console.error("Failed to sign in", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to sign in", error);
+        }
     });
 ```
 
@@ -2554,9 +2738,11 @@ There are 3 verification scenarios:
 - {function} success - callback function to pass {object} credentials to as an argument
 - {function} error - callback function which will be passed a {string} error message as an argument
 - {string} phoneNumber - phone number to verify
-- {integer} timeOutDuration - (optional) time to wait in seconds before timing out
-- {string} fakeVerificationCode - (optional) to test instant verification on Android ,specify a fake verification code to return for whitelisted phone numbers.
-    - See [Firebase SDK Phone Auth Android Integration Testing](https://firebase.google.com/docs/auth/android/phone-auth#integration-testing) for more info.
+- {object} opts - (optional) parameters
+    - {integer} timeOutDuration - (Android only) time to wait in seconds before timing out. Defaults to 30 seconds if not specified.
+    - {boolean} requireSmsValidation - (Android only) whether to always require SMS validation on Android even if instant verification is available. Defaults to false if not specified.
+    - {string} fakeVerificationCode - (Android only) to test instant verification on Android, specify a fake verification code to return for whitelisted phone numbers.
+        - See [Firebase SDK Phone Auth Android Integration Testing](https://firebase.google.com/docs/auth/android/phone-auth#integration-testing) for more info.
 
 The success callback will be passed a credential object with the following possible properties:
 - {boolean} instantVerification - `true` if the Android device used instant verification to instantly verify the user without sending an SMS
@@ -2598,7 +2784,11 @@ FirebasePlugin.verifyPhoneNumber(function(credential) {
     }
 }, function(error) {
     console.error("Failed to verify phone number: " + JSON.stringify(error));
-}, number, timeOutDuration, fakeVerificationCode);
+}, number, {
+    timeOutDuration: timeOutDuration,
+    requireSmsValidation: false,
+    fakeVerificationCode: fakeVerificationCode
+});
 
 function signInWithCredential(credential){
     FirebasePlugin.signInWithCredential(credential, function() {
@@ -2627,6 +2817,214 @@ You can [set up reCAPTCHA verification for iOS](https://firebase.google.com/docs
 
 This adds the `REVERSED_CLIENT_ID` from the `GoogleService-Info.plist` to the list of custom URL schemes in your Xcode project, so you don't need to do this manually.
 
+### enrollSecondAuthFactor
+Enrolls a user-specified phone number as a second factor for multi-factor authentication (MFA).
+
+- As with [verifyPhoneNumber](#verifyphonenumber), this may require the user to manually input the verification code received in an SMS message.
+    - In this case, once the user has entered the code, `enrollSecondAuthFactor` will need to be called again with the `credential` option used to specified the `code` and verification `id`.
+- This function involves a similar verification flow to [verifyPhoneNumber](#verifyphonenumber) and therefore has the same pre-requisites and requirements.
+- See the Firebase MFA documentation for [Android](https://cloud.google.com/identity-platform/docs/android/mfa) and [iOS](https://cloud.google.com/identity-platform/docs/ios/mfa) for more information on MFA-specific setup requirements.
+- Calling when no user is signed in will result in error callback being invoked.
+
+**Parameters**:
+- {function} success - callback function to invoke either upon:
+    - successful enrollment: will be passed `true` as an argument
+    - user-entered verification code required: will be passed a `credential` object with a verification `id`.
+- {function} error - callback function which will be passed a {string} error message as an argument
+- {string} phoneNumber - phone number to enroll
+- {object} opts - (optional) parameters
+    - {string} displayName - display name for second factor.
+      - Used when a user has multiple second factor phone numbers enrolled and asking them which to use since the full phone number is masked.
+      - If not specified, defaults to the masked phone number.
+    - {object} credential - if manual entry of the verification code in an SMS is required, the `credential` object will be passed to the `success` function. The user-entered code should be appended to this object as the `code` property then this function re-invoked with the `credential` specified in the `opts` argument.
+    - {integer} timeOutDuration - (Android only) time to wait in seconds before timing out. Defaults to 30 seconds if not specified.
+    - {boolean} requireSmsValidation - (Android only) whether to always require SMS validation on Android even if instant verification is available. Defaults to false if not specified.
+    - {string} fakeVerificationCode - (Android only) to test instant verification on Android, specify a fake verification code to return for whitelisted phone numbers.
+        - See [Firebase SDK Phone Auth Android Integration Testing](https://firebase.google.com/docs/auth/android/phone-auth#integration-testing) for more info.
+
+Example usage:
+
+```javascript
+var phoneNumber = '+441234567890';
+var timeOutDuration = 60;
+var fakeVerificationCode = '123456';
+var displayName = "Work phone";
+var credential;
+
+function enrollSecondAuthFactor(){
+    FirebasePlugin.enrollSecondAuthFactor(function(result) {
+        if(typeof result === "object"){
+            // User must enter SMS verification code manually
+            credential = result;
+            promptUserToInputCode() // you need to implement this
+                .then(function(userEnteredCode){
+                    credential.code = userEnteredCode; // set the user-entered verification code on the credential object
+                    enrollSecondAuthFactor(); // re-invoke the function with the credential
+                });
+        }else{
+            console.log("Second factor successfully enrolled");
+        }
+    }, function(error) {
+        console.error("Failed to enroll second factor: " + JSON.stringify(error));
+    }, phoneNumber, {
+        displayName: displayName,
+        credential: credential,
+        timeOutDuration: timeOutDuration,
+        requireSmsValidation: false,
+        fakeVerificationCode: fakeVerificationCode
+    });
+}
+enrollSecondAuthFactor();
+```
+
+### verifySecondAuthFactor
+Verifies a second factor phone number for multi-factor authentication (MFA).
+
+- If a user has MFA enrolled on their account, when they try to perform an authentication operation, such as sign-in using one of the first factor methods (e.g. [signInUserWithEmailAndPassword](#signinuserwithemailandpassword)), the error callback of that function will be invoked.
+    - The first argument passed to the error callback will be the error message: "Second factor required"
+    - A second argument will be passed containing the list of (one or more) enrolled second factors for that user; each factor in the list will be an object with the following properties:
+        - {integer} index - index of the factor in the list - specify this as `selectedIndex` to select this factor.
+        - {string} displayName - name of factor specified by the user when this factor was enrolled.
+          - If no name was specified during enrollment, defaults to the masked phone number.
+        - {string} phoneNumber - phone number for this factor.
+- The app should then call this function, specifying the `selectedIndex` of the second factor in the `params` argument.
+    - If there is more than one second factor enrolled, the app should ask the user to select which one to use and specify the index of this as the `selectedIndex`
+    - If there is only one, the `selectedIndex` should be specified as `0`.
+- As with [verifyPhoneNumber](#verifyphonenumber), this may require the user to manually input the verification code received in an SMS message.
+    - In this case, once the user has entered the code, `enrollSecondAuthFactor` will need to be called again with the `credential` option used to specified the `code` and verification `id`.
+- This function involves a similar verification flow to [verifyPhoneNumber](#verifyphonenumber) and therefore has the same pre-requisites and requirements.
+- See the Firebase MFA documentation for [Android](https://cloud.google.com/identity-platform/docs/android/mfa) and [iOS](https://cloud.google.com/identity-platform/docs/ios/mfa) for more information on MFA-specific setup requirements.
+
+**Parameters**:
+- {function} success - callback function to invoke either upon:
+    - successful verification : will be passed `true` as an argument
+    - user-entered verification code required: will be passed a `credential` object with a verification `id`.
+- {function} error - callback function which will be passed a {string} error message as an argument
+- {object} params - conditionally required parameters - either:
+    - {integer} selectedIndex - index of selected second factor phone number to use for verification.
+    - {object} credential - if manual entry of the verification code in an SMS is required, the `credential` object will be passed to the `success` function. The user-entered code should be appended to this object as the `code` property then this function
+- {object} opts - (optional Android only) parameters
+     re-invoked with the `credential` specified in the `opts` argument.
+    - {integer} timeOutDuration - time to wait in seconds before timing out. Defaults to 30 seconds if not specified.
+    - {boolean} requireSmsValidation - whether to always require SMS validation on Android even if instant verification is available. Defaults to false if not specified.
+    - {string} fakeVerificationCode - to test instant verification on Android, specify a fake verification code to return for whitelisted phone numbers.
+        - See [Firebase SDK Phone Auth Android Integration Testing](https://firebase.google.com/docs/auth/android/phone-auth#integration-testing) for more info.
+    - {string} phoneNumber -  phone number to use for fake instant verification - required if `fakeVerificationCode` is specified
+
+Example usage:
+
+```javascript
+var selectedIndex, credential;
+
+function verifySecondAuthFactor(){
+    FirebasePlugin.verifySecondAuthFactor(function(result) {
+        if(typeof result === "object"){
+            // User must enter SMS verification code manually
+            credential = result;
+            promptUserToInputCode() // you need to implement this
+                .then(function(userEnteredCode){
+                    credential.code = userEnteredCode; // set the user-entered verification code on the credential object
+                    verifySecondAuthFactor(); // re-invoke the function with the credential
+                });
+        }else{
+            console.log("Second factor successfully enrolled");
+        }
+    }, function(error) {
+        console.error("Failed to enroll second factor: " + JSON.stringify(error));
+    }, {
+        selectedIndex: selectedIndex,
+        credential: credential
+    });
+}
+
+FirebasePlugin.signInWithCredential(credential, function() {
+        console.log("Successfully signed in");
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            if(secondFactors.length === 1){
+                // Only 1 enrolled second factor so select and use it
+                selectedIndex = 0;
+                verifySecondAuthFactor();
+            }else{
+                // Multiple second factors enrolled so ask user to choose which to use
+                promptUserToSelectFactor(secondFactors) // you need to implement this
+                    .then(function(_selectedIndex){
+                        selectedIndex = _selectedIndex;
+                        verifySecondAuthFactor();
+                    });
+            }
+        }else{
+            console.error("Failed to sign in", error);
+        }
+    });
+```
+
+### listEnrolledSecondAuthFactors
+Lists the second factors the current user has enrolled for multi-factor authentication (MFA).
+- Calling when no user is signed in will result in error callback being invoked.
+
+**Parameters**:
+- {function} success - callback function to invoke upon successfully retrieving second factors. Will be passed an {array} of second factor {object} with properties:
+    - {integer} index - index of the factor in the list
+    - {string} displayName - name of factor specified by the user when this factor was enrolled.
+      - If no name was specified during enrollment, defaults to the masked phone number.
+    - {string} phoneNumber - (Android only) enrolled phone number for this factor.
+      - On iOS, this is not available when listing enrolled factors.
+
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+Example usage:
+
+```javascript
+FirebasePlugin.listEnrolledSecondAuthFactors(
+    function(secondFactors) {
+        if(secondFactors.length > 0){
+            for(var secondFactor of secondFactors){
+                console.log(`${secondFactor.index}: ${secondFactor.displayName}${secondFactor.phoneNumber ? ' ('+secondFactor.phoneNumber+')' : ''}`)
+            }
+        }else{
+            console.log("No second factors are enrolled");
+        }
+    }, function(error) {
+        console.error("Failed to list second factors: " + JSON.stringify(error));
+    }
+)
+```
+
+### unenrollSecondAuthFactor
+Unenrolls (removes) an enrolled second factor that the current user has enrolled for multi-factor authentication (MFA).
+- Calling when no user is signed in will result in error callback being invoked.
+
+**Parameters**:
+- {function} success - callback function to invoke upon success
+- {function} error - callback function which will be passed a {string} error message as an argument
+- {number} selectedIndex - Index of the second factor to unenroll (obtained using [listEnrolledSecondAuthFactors](#listenrolledsecondauthfactors))
+
+Example usage:
+
+```javascript
+function unenrollSecondAuthFactor(){
+    FirebasePlugin.listEnrolledSecondAuthFactors(
+        function(secondFactors) {
+            askUserToSelectSecondFactorToUnenroll(secondFactors) // you implement this
+                .then(function(selectedIndex){
+                    FirebasePlugin.unenrollSecondAuthFactor(
+                        function() {
+                            console.log("Successfully unenrolled selected second factor");
+                        }, function(error) {
+                            console.error("Failed to unenroll second factor: " + JSON.stringify(error));
+                        },
+                        selectedIndex
+                    )
+                }
+            );
+        }, function(error) {
+            console.error("Failed to list second factors: " + JSON.stringify(error));
+        }
+    )
+}
+```
+
 ### setLanguageCode
 Sets the user-facing language code for auth operations that can be internationalized, such as sendEmailVerification() or verifyPhoneNumber(). This language code should follow the conventions defined by the IETF in BCP47.
 
@@ -2648,6 +3046,8 @@ Authenticates the user with email/password-based user account to obtain a creden
 - {function} success - callback function to pass {object} credentials to as an argument. The credential object has the following properties:
     - {string} id - the identifier of a native credential object which can be used for signing in the user.
 - {function} error - callback function which will be passed a {string} error message as an argument
+    - If the error is due to the user account requiring multi-factor authentication, a second {array} argument will be passed containing a list of enrolled factors.
+        - A factor should be selected and used for second factor verification - see [verifySecondAuthFactor](#verifysecondauthfactor) for more on this.
 
 Example usage:
 
@@ -2660,8 +3060,12 @@ Example usage:
             console.error("Failed to re-authenticate", error);
         });
         // User is now signed in
-    }, function(error) {
-        console.error("Failed to authenticate with email/password", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to authenticate with email/password", error)
+        }
     });
 ```
 
@@ -2695,6 +3099,36 @@ To use Google Sign-in in your Android app you need to do the following:
 - Enable Google Sign-in in the Firebase console
 
 For details how to do the above, see the [Google Sign-In on Android page](https://firebase.google.com/docs/auth/android/google-signin) in the Firebase documentation.
+
+<br>
+
+**Server side verification**
+
+Once the id token has been obtained from `authenticateUserWithGoogle()` it can be sent to your server to get access to more information about the user's google account. However, it's recommended by Google that the id token be validated on your server before being used. You should generally not trust tokens supplied by clients without performing this validation. While you can write the code to perform this check yourself, it's strongly recommended that you use a library supplied by Google  such as [google-auth-library](https://www.npmjs.com/package/google-auth-library) for this purpose.
+
+The following is sample coded taken from [Google documentation](https://developers.google.com/identity/sign-in/web/backend-auth) for performing a server side verification of an id token:
+
+```javascript
+const {OAuth2Client} = require('google-auth-library');
+
+const client = new OAuth2Client(CLIENT_ID);
+
+async function verify() {
+    const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: CLIENT_ID,  // Specify the CLIENT_ID of the app that accesses the backend
+        // Or, if multiple clients access the backend:
+        //[CLIENT_ID_1, CLIENT_ID_2, CLIENT_ID_3]
+    });
+    const payload = ticket.getPayload();
+    const userid = payload['sub'];
+    // If request specified a G Suite domain:
+    // const domain = payload['hd'];
+}
+verify().catch(console.error);
+```
+
+<br>
 
 ### authenticateUserWithApple
 Authenticates the user with an Apple account using Sign In with Apple to obtain a credential that can be used to sign the user in/link to an existing user account/reauthenticate the user.
@@ -2737,6 +3171,64 @@ To use Sign In with Apple in your iOS app you need to do the following:
 To use Sign In with Apple in your Android app you need to do the following:
 - Configure your app for Sign In with Apple as outlined in the [Firebase documentation's "Before you begin" section](https://firebase.google.com/docs/auth/android/apple#before-you-begin)
 
+### authenticateUserWithMicrosoft
+Authenticates the user with a Microsoft account using Sign In with Oauth to obtain a credential that can be used to sign the user in/link to an existing user account/reauthenticate the user.
+- See [Firebase documentation "Authenticate Using Microsoft" section](https://firebase.google.com/docs/auth/web/microsoft-oauth)
+
+**Parameters**:
+- {function} success - callback function to pass {object} credentials to as an argument. The credential object has the following properties:
+    - {string} id - the identifier of a native credential object which can be used for signing in the user.
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+Example usage:
+
+```javascript
+
+FirebasePlugin.authenticateUserWithMicrosoft(function(credential) {
+    FirebasePlugin.signInWithCredential(credential, function() {
+            console.log("Successfully signed in");
+        }, function(error) {
+            console.error("Failed to sign in", error);
+        });
+}, function(error) {
+    console.error("Failed to authenticate with Microsoft: " + error);
+});
+```
+
+### authenticateUserWithFacebook
+Authenticates the user with a Facebook account using a Facebook access token to obtain a Firebase credential that can be used to sign the user in/link to an existing user account/reauthenticate the user.
+- Requires a 3rd party plugin such as [cordova-plugin-facebook-connect](https://github.com/cordova-plugin-facebook-connect/cordova-plugin-facebook-connect) to obtain the access token via the Facebook SDK.
+- See the "Before you begin" sections for pre-requisites for using Facebook authentication in your app:
+    - [Android](https://firebase.google.com/docs/auth/android/facebook-login#before_you_begin)
+    - [iOS](https://firebase.google.com/docs/auth/ios/facebook-login#before_you_begin)
+
+**Parameters**:
+- {function} success - callback function to pass {object} credentials to as an argument. The credential object has the following properties:
+    - {string} id - the identifier of a native credential object which can be used for signing in the user.
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+Example usage:
+
+```javascript
+facebookConnectPlugin.login(["public_profile"],
+    function(userData){
+        var accessToken = userData.authResponse.accessToken;
+        FirebasePlugin.authenticateUserWithFacebook(accessToken, function(credential) {
+            FirebasePlugin.signInWithCredential(credential, function() {
+                console.log("Successfully signed in with Facebook");
+            }, function(error) {
+                console.error("Failed to sign in with Facebook", error);
+            });
+        }, function(error) {
+            console.error("Failed to authenticate with Facebook", error);
+        });
+    },
+    function(error){
+        console.error("Failed to login to Facebook", error);
+    }
+);
+```
+
 ### signInWithCredential
 Signs the user into Firebase with credentials obtained via an authentication method such as `verifyPhoneNumber()` or `authenticateUserWithGoogle()`.
 See the [Android-](https://firebase.google.com/docs/auth/android/phone-auth#sign-in-the-user) and [iOS](https://firebase.google.com/docs/auth/ios/phone-auth#sign-in-the-user-with-the-verification-code)-specific Firebase documentation for more info.
@@ -2753,6 +3245,8 @@ See the [Android-](https://firebase.google.com/docs/auth/android/phone-auth#sign
     - {string} code - if the credential was obtained via `verifyPhoneNumber()` and `instantVerification` is `false`, you must set this to the activation code value as entered by the user from the received SMS message.
 - {function} success - callback function to call on successful sign-in using credentials
 - {function} error - callback function which will be passed a {string} error message as an argument
+    - If the error is due to the user account requiring multi-factor authentication, a second {array} argument will be passed containing a list of enrolled factors.
+        - A factor should be selected and used for second factor verification - see [verifySecondAuthFactor](#verifysecondauthfactor) for more on this.
 
 Example usage:
 
@@ -2760,8 +3254,12 @@ Example usage:
 function signInWithCredential(credential){
     FirebasePlugin.signInWithCredential(credential, function() {
         console.log("Successfully signed in");
-    }, function(error) {
-        console.error("Failed to sign in", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to sign in", error);
+        }
     });
 }
 
@@ -2783,6 +3281,8 @@ See the [Android-](https://firebase.google.com/docs/auth/android/account-linking
     - {string} code - if the credential was obtained via `verifyPhoneNumber()` and `instantVerification` is `false`, you must set this to the activation code value as entered by the user from the received SMS message.
 - {function} success - callback function to call on successful linking using credentials
 - {function} error - callback function which will be passed a {string} error message as an argument
+    - If the error is due to the user account requiring multi-factor authentication, a second {array} argument will be passed containing a list of enrolled factors.
+        - A factor should be selected and used for second factor verification - see [verifySecondAuthFactor](#verifysecondauthfactor) for more on this.
 
 Example usage:
 
@@ -2790,11 +3290,14 @@ Example usage:
 function linkUserWithCredential(credential){
     FirebasePlugin.linkUserWithCredential(credential, function() {
         console.log("Successfully linked");
-    }, function(error) {
-        console.error("Failed to link", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to link", error);
+        }
     });
 }
-
 ```
 
 ### reauthenticateWithCredential
@@ -2818,8 +3321,12 @@ Example usage:
 ```javascript
     FirebasePlugin.reauthenticateWithCredential(credential, function() {
         console.log("Successfully reauthenticated");
-    }, function(error) {
-        console.error("Failed to reauthenticate", error);
+    }, function(error, secondFactors) {
+        if(error === "Second factor required" && typeof secondFactors !== "undefined"){
+            handleSecondFactorAuthentation(secondFactors); // you need to implement this
+        }else{
+            console.error("Failed to reauthenticate", error);
+        }
     });
 ```
 
@@ -2836,6 +3343,52 @@ Example usage:
     FirebasePlugin.registerAuthStateChangeListener(function(userSignedIn){
         console.log("Auth state changed: User signed " + (userSignedIn ? "in" : "out"));
     });
+```
+
+### useAuthEmulator
+Instruments your app to talk to the [Firebase Authentication emulator](https://firebase.google.com/docs/emulator-suite/connect_auth).
+
+
+**Parameters**:
+- {string} host - hostname or IP address of the Authentication emulator.
+- {integer} port - port of the Authentication emulator.
+- {function} success - callback function to call on success
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+Example usage:
+
+```javascript
+FirebasePlugin.useAuthEmulator('localhost', 9099, function() {
+    console.log("Using Firebase Authentication emulator");
+}, function(error) {
+    console.error("Failed to enable the Firebase Authentication emulator", error);
+});
+```
+
+### getClaims
+Returns the entire payload claims of the ID token including the standard reserved claims as well as the custom claims (set by developer via Admin SDK).
+
+
+**Parameters**:
+- {function} success - callback function to pass claims {object} to as an argument
+- {function} error - callback function which will be passed a {string} error message as an argument
+
+Example usage:
+
+```javascript
+FirebasePlugin.getClaims(function(claims) {
+    // reserved claims
+    console.log("email", claims.email);
+    console.log("email_verified", claims.email_verified);
+    console.log("name", claims.name);
+    console.log("user_id", claims.user_id);
+
+    //custom claims
+    console.log("exampleClaimA", claims.exampleClaimA);
+    console.log("exampleClaimB", claims.exampleClaimB);
+}, function(error) {
+    console.error("Failed to fetch claims", error);
+});
 ```
 
 ## Remote Config
@@ -3117,9 +3670,10 @@ Adds a new document to a Firestore collection, which will be allocated an auto-g
 **Parameters**:
 - {object} document - document object to add to collection
 - {string} collection - name of top-level collection to add document to.
-- {function} success - callback function to call on successfully adding the document.
+- {boolean} timestamp (optional) - Add 'created' and 'lastUpdate' variables in the document. Default ```false```.
+- {function} success (optional) - callback function to call on successfully adding the document.
 Will be passed a {string} argument containing the auto-generated document ID that the document was stored against.
-- {function} error - callback function which will be passed a {string} error message as an argument.
+- {function} error (optional) - callback function which will be passed a {string} error message as an argument.
 
 ```javascript
 var document = {
@@ -3130,6 +3684,15 @@ var document = {
     }
 };
 var collection = "my_collection";
+
+// with timestamp
+FirebasePlugin.addDocumentToFirestoreCollection(document, collection, true, function(documentId){
+    console.log("Successfully added document with id="+documentId);
+}, function(error){
+    console.error("Error adding document: "+error);
+});
+
+// without timestamp
 FirebasePlugin.addDocumentToFirestoreCollection(document, collection, function(documentId){
     console.log("Successfully added document with id="+documentId);
 }, function(error){
@@ -3144,8 +3707,9 @@ Sets (adds/replaces) a document with the given ID in a Firestore collection.
 - {string} documentId - document ID to use when setting document in the collection.
 - {object} document - document object to set in collection.
 - {string} collection - name of top-level collection to set document in.
-- {function} success - callback function to call on successfully setting the document.
-- {function} error - callback function which will be passed a {string} error message as an argument.
+- {boolean} timestamp (optional) - Add 'lastUpdate' variable in the document. Default ```false```.
+- {function} success (optional) - callback function to call on successfully setting the document.
+- {function} error (optional) - callback function which will be passed a {string} error message as an argument.
 
 ```javascript
 var documentId = "my_doc";
@@ -3157,6 +3721,15 @@ var document = {
     }
 };
 var collection = "my_collection";
+
+// with timestamp
+FirebasePlugin.setDocumentInFirestoreCollection(documentId, document, collection, true, function(){
+    console.log("Successfully set document with id="+documentId);
+}, function(error){
+    console.error("Error setting document: "+error);
+});
+
+// without timestamp
 FirebasePlugin.setDocumentInFirestoreCollection(documentId, document, collection, function(){
     console.log("Successfully set document with id="+documentId);
 }, function(error){
@@ -3173,8 +3746,9 @@ If the no document with the specified ID exists in the collection, an error will
 - {string} documentId - document ID of the document to update.
 - {object} document - entire document or document fragment to update existing document with.
 - {string} collection - name of top-level collection to update document in.
-- {function} success - callback function to call on successfully updating the document.
-- {function} error - callback function which will be passed a {string} error message as an argument.
+- {boolean} timestamp (optional) - Add 'lastUpdate' variable in the document. Default ```false```.
+- {function} success (optional) - callback function to call on successfully updating the document.
+- {function} error (optional) - callback function which will be passed a {string} error message as an argument.
 
 ```javascript
 var documentId = "my_doc";
@@ -3183,6 +3757,15 @@ var documentFragment = {
     "a_new_string": "bar"
 };
 var collection = "my_collection";
+
+// with timestamp
+FirebasePlugin.updateDocumentInFirestoreCollection(documentId, documentFragment, collection, true, function(){
+    console.log("Successfully updated document with id="+documentId);
+}, function(error){
+    console.error("Error updating document: "+error);
+});
+
+// without timestamp
 FirebasePlugin.updateDocumentInFirestoreCollection(documentId, documentFragment, collection, function(){
     console.log("Successfully updated document with id="+documentId);
 }, function(error){
@@ -3616,6 +4199,41 @@ Example usage:
 ```javascript
     FirebasePlugin.registerInstallationIdChangeListener(function(installationId){
         console.log("New installation ID: "+installationId);
+    });
+```
+
+## Miscellaneous
+Functions unrelated to any specific Firebase SDK component.
+
+### registerApplicationDidBecomeActiveListener
+Registers a Javascript function to invoke when the iOS application becomes active after being in the background.
+
+- iOS only.
+
+**Parameters**:
+- {function} fn - callback function to invoke when application becomes active
+
+Example usage:
+
+```javascript
+    FirebasePlugin.registerApplicationDidBecomeActiveListener(function(){
+        console.log("Application became active");
+    });
+```
+
+### registerApplicationDidEnterBackgroundListener
+Registers a Javascript function to invoke when the iOS application is sent to the background.
+
+- iOS only.
+
+**Parameters**:
+- {function} fn - callback function to invoke when application is sent to the background
+
+Example usage:
+
+```javascript
+    FirebasePlugin.registerApplicationDidEnterBackgroundListener(function(){
+        console.log("Application send to background");
     });
 ```
 

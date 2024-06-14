@@ -9,6 +9,7 @@
  */
 var fs = require('fs');
 var path = require("path");
+var execSync = require('child_process').execSync;
 var utilities = require("./lib/utilities");
 
 var appName;
@@ -25,6 +26,7 @@ var setupEnv = function(){
     PLUGIN_ID = utilities.getPluginId();
     PLATFORM = {
         IOS: {
+            platformDir: IOS_DIR,
             dest: IOS_DIR + '/' + appName + '/Resources/GoogleService-Info.plist',
             src: [
                 'GoogleService-Info.plist',
@@ -34,8 +36,10 @@ var setupEnv = function(){
             appPlist: IOS_DIR + '/' + appName + '/' + appName + '-Info.plist',
             entitlementsDebugPlist: IOS_DIR + '/' + appName + '/Entitlements-Debug.plist',
             entitlementsReleasePlist: IOS_DIR + '/' + appName + '/Entitlements-Release.plist',
+            podFile: IOS_DIR + '/Podfile'
         },
         ANDROID: {
+            platformDir: ANDROID_DIR,
             dest: ANDROID_DIR + '/app/google-services.json',
             src: [
                 'google-services.json',
@@ -137,11 +141,18 @@ module.exports = function(context){
 
         var helper = require("./ios/helper");
         var xcodeProjectPath = helper.getXcodeProjectPath();
+        var podFileModified = false;
         helper.ensureRunpathSearchPath(context, xcodeProjectPath);
-
-        if(pluginVariables['IOS_STRIP_DEBUG'] && pluginVariables['IOS_STRIP_DEBUG'] === 'true'){
-            helper.stripDebugSymbols();
-        }
+        podFileModified = helper.applyPodsPostInstall(pluginVariables, PLATFORM.IOS);
         helper.applyPluginVarsToPlists(pluginVariables, PLATFORM.IOS);
+        podFileModified = helper.applyPluginVarsToPodfile(pluginVariables, PLATFORM.IOS) || podFileModified;
+
+        if(podFileModified){
+            utilities.log('Updating installed Pods');
+            execSync('pod install', {
+                cwd: path.resolve(PLATFORM.IOS.platformDir),
+                encoding: 'utf8'
+            });
+        }
     }
 };
