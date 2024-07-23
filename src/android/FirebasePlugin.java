@@ -4065,7 +4065,7 @@ public class FirebasePlugin extends CordovaPlugin {
                     }
                 });
             } catch (Exception e) {
-                FirebasePlugin.instance.executeGlobalJavascript(JS_GLOBAL_NAMESPACE + "_onAuthIdTokenChange()");
+                handleExceptionWithoutContext(e);
             }
         }
     }
