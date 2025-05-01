@@ -12,9 +12,11 @@ var comment = "\"Crashlytics\"";
 
 var versionRegex = /\d+\.\d+\.\d+[^'"]*/,
     firebasePodRegex = /pod 'Firebase([^']+)', '(\d+\.\d+\.\d+[^'"]*)'/g,
+    inAppMessagingPodRegEx = /pod 'FirebaseInAppMessaging', '(\d+\.\d+\.\d+[^'"]*)'/,
     standardFirestorePodRegEx = /pod 'FirebaseFirestore', '(\d+\.\d+\.\d+[^'"]*)'/,
     googleSignInPodRegEx = /pod 'GoogleSignIn', '(\d+\.\d+\.\d+[^'"]*)'/,
     googleTagManagerPodRegEx = /pod 'GoogleTagManager', '(\d+\.\d+\.\d+[^'"]*)'/,
+    prebuiltFirestorePodRegEx = /pod 'FirebaseFirestore', :tag => '(\d+\.\d+\.\d+[^'"]*)', :git => 'https:\/\/github.com\/invertase\/firestore-ios-sdk-frameworks.git'/,
     prebuiltFirestorePodTemplate = "pod 'FirebaseFirestore', :tag => '{version}', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git'",
     iosDeploymentTargetPodRegEx = /platform :ios, '(\d+\.\d+\.?\d*)'/;
 
@@ -47,7 +49,7 @@ function ensureUrlSchemeInPlist(urlScheme, appPlist){
         if(typeof entryIndex === "undefined") entryIndex = i;
         appPlist['CFBundleURLTypes'][entryIndex] = entry;
         appPlistModified = true;
-        utilities.log('cordova-plugin-firebasex: Added URL scheme "'+urlScheme+'"');
+        utilities.log('Added URL scheme "'+urlScheme+'"');
     }
 
     return {plist: appPlist, modified: appPlistModified}
@@ -83,11 +85,21 @@ module.exports = {
         // Generate a unique ID for our new build phase.
         var id = xcodeProject.generateUuid();
         // Create the build phase.
+        if (!xcodeProject.hash.project.objects.PBXShellScriptBuildPhase) {
+            xcodeProject.hash.project.objects.PBXShellScriptBuildPhase = {};
+        }
+
         xcodeProject.hash.project.objects.PBXShellScriptBuildPhase[id] = {
             isa: "PBXShellScriptBuildPhase",
             buildActionMask: 2147483647,
             files: [],
-            inputPaths: ['"' + '$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)' + '"'],
+            inputPaths: [
+                '"' + '${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}' + '"',
+                '"' + '${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}' + '"',
+                '"' + '${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist' + '"',
+                '"' + '$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist' + '"',
+                '"' + '$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)' + '"',
+            ],
             name: comment,
             outputPaths: [],
             runOnlyForDeploymentPostprocessing: 0,
@@ -180,6 +192,46 @@ module.exports = {
         fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
     },
 
+    addGoogleTagManagerContainer: function (context, xcodeProjectPath) {
+        const appName = utilities.getAppName();
+        const containerDirectorySource = `${context.opts.projectRoot}/resources/ios/container`;
+        const containerDirectoryTarget = `platforms/ios/${appName}/container`;
+        const xcodeProject = xcode.project(xcodeProjectPath);
+        xcodeProject.parseSync();
+
+        if (utilities.directoryExists(containerDirectorySource)) {
+            utilities.log(`Preparing GoogleTagManager on iOS`);
+            try {
+                fs.cpSync(containerDirectorySource, containerDirectoryTarget, {recursive: true});
+                const appPBXGroup = xcodeProject.findPBXGroupKey({name: appName})
+                xcodeProject.addResourceFile('container', {
+                    lastKnownFileType: 'folder',
+                    fileEncoding: 9
+                }, appPBXGroup);
+                fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
+            } catch (error) {
+                utilities.error(error);
+            }
+        }
+    },
+
+    removeGoogleTagManagerContainer: function (context, xcodeProjectPath) {
+        const appName = utilities.getAppName();
+        const appContainerDirectory = `platforms/ios/${appName}/container`;
+        const xcodeProject = xcode.project(xcodeProjectPath);
+        xcodeProject.parseSync();
+        if(utilities.directoryExists(appContainerDirectory)){
+            utilities.log(`Remove GoogleTagManager container`);
+            const appPBXGroup = xcodeProject.findPBXGroupKey({name: appName})
+            xcodeProject.removeResourceFile('container', {
+                lastKnownFileType: 'folder',
+                fileEncoding: 9
+            }, appPBXGroup);
+            fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
+            fs.rmSync(appContainerDirectory, {recursive: true});
+        }
+    },
+
     ensureRunpathSearchPath: function(context, xcodeProjectPath){
 
         function addRunpathSearchBuildProperty(proj, build) {
@@ -220,10 +272,18 @@ module.exports = {
     },
     applyPodsPostInstall: function(pluginVariables, iosPlatform){
         var podFileModified = false,
-            podFilePath = iosPlatform.podFile,
-            podFile = fs.readFileSync(path.resolve(podFilePath)).toString(),
+            podFilePath = path.resolve(iosPlatform.podFile);
+
+        // check if file exists
+        if(!fs.existsSync(podFilePath)){
+            utilities.warn(`Podfile not found at ${podFilePath}`);
+            return false;
+        }
+
+        var podFile = fs.readFileSync(podFilePath).toString(),
             DEBUG_INFORMATION_FORMAT = pluginVariables['IOS_STRIP_DEBUG'] && pluginVariables['IOS_STRIP_DEBUG'] === 'true' ? 'dwarf' : 'dwarf-with-dsym',
-            IPHONEOS_DEPLOYMENT_TARGET = podFile.match(iosDeploymentTargetPodRegEx)[1];
+            iosDeploymentTargetMatch = podFile.match(iosDeploymentTargetPodRegEx),
+            IPHONEOS_DEPLOYMENT_TARGET = iosDeploymentTargetMatch ? iosDeploymentTargetMatch[1] : null;
 
         if(!podFile.match('post_install')){
             podFile += `
@@ -231,7 +291,7 @@ post_install do |installer|
     installer.pods_project.targets.each do |target|
         target.build_configurations.each do |config|
             config.build_settings['DEBUG_INFORMATION_FORMAT'] = '${DEBUG_INFORMATION_FORMAT}'
-            config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${IPHONEOS_DEPLOYMENT_TARGET}'
+            ${IPHONEOS_DEPLOYMENT_TARGET ? "config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '"+IPHONEOS_DEPLOYMENT_TARGET + "'" : ""}
             if target.respond_to?(:product_type) and target.product_type == "com.apple.product-type.bundle"
                 config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
             end
@@ -240,16 +300,40 @@ post_install do |installer|
 end
                 `;
             fs.writeFileSync(path.resolve(podFilePath), podFile);
-            utilities.log('cordova-plugin-firebasex: Applied post install block to Podfile');
+            utilities.log('Applied post install block to Podfile');
             podFileModified = true;
         }
         return podFileModified;
     },
     applyPluginVarsToPlists: function(pluginVariables, iosPlatform){
-        var googlePlist = plist.parse(fs.readFileSync(path.resolve(iosPlatform.dest), 'utf8')),
-            appPlist = plist.parse(fs.readFileSync(path.resolve(iosPlatform.appPlist), 'utf8')),
-            entitlementsDebugPlist = plist.parse(fs.readFileSync(path.resolve(iosPlatform.entitlementsDebugPlist), 'utf8')),
-            entitlementsReleasePlist = plist.parse(fs.readFileSync(path.resolve(iosPlatform.entitlementsReleasePlist), 'utf8')),
+        var googlePlistPath = path.resolve(iosPlatform.dest);
+        if(!fs.existsSync(googlePlistPath)){
+            utilities.warn(`Google plist not found at ${googlePlistPath}`);
+            return;
+        }
+
+        var appPlistPath = path.resolve(iosPlatform.appPlist);
+        if(!fs.existsSync(appPlistPath)){
+            utilities.warn(`App plist not found at ${appPlistPath}`);
+            return;
+        }
+
+        var entitlementsDebugPlistPath = path.resolve(iosPlatform.entitlementsDebugPlist);
+        if(!fs.existsSync(entitlementsDebugPlistPath)){
+            utilities.warn(`Entitlements debug plist not found at ${entitlementsDebugPlistPath}`);
+            return;
+        }
+
+        var entitlementsReleasePlistPath = path.resolve(iosPlatform.entitlementsReleasePlist);
+        if(!fs.existsSync(entitlementsReleasePlistPath)){
+            utilities.warn(`Entitlements release plist not found at ${entitlementsReleasePlistPath}`);
+            return;
+        }
+
+        var googlePlist = plist.parse(fs.readFileSync(googlePlistPath, 'utf8')),
+            appPlist = plist.parse(fs.readFileSync(appPlistPath, 'utf8')),
+            entitlementsDebugPlist = plist.parse(fs.readFileSync(entitlementsDebugPlistPath, 'utf8')),
+            entitlementsReleasePlist = plist.parse(fs.readFileSync(entitlementsReleasePlistPath, 'utf8')),
             googlePlistModified = false,
             appPlistModified = false,
             entitlementsPlistsModified = false;
@@ -333,24 +417,66 @@ end
         }
     },
     applyPluginVarsToPodfile: function(pluginVariables, iosPlatform){
-        var podFileContents = fs.readFileSync(path.resolve(iosPlatform.podFile), 'utf8'),
-            podFileModified = false;
+        var podFilePath = path.resolve(iosPlatform.podFile);
+
+        // check if file exists
+        if(!fs.existsSync(podFilePath)){
+            utilities.warn(`Podfile not found at ${podFilePath}`);
+            return false;
+        }
+
+        var podFileContents = fs.readFileSync(podFilePath, 'utf8'),
+            podFileModified = false,
+            specifiedInAppMessagingVersion = false;
+
+        if(pluginVariables['IOS_FIREBASE_IN_APP_MESSAGING_VERSION']){
+            if(pluginVariables['IOS_FIREBASE_IN_APP_MESSAGING_VERSION'].match(versionRegex)){
+                specifiedInAppMessagingVersion = true;
+                var matches = podFileContents.match(inAppMessagingPodRegEx);
+                if(matches){
+                    matches.forEach((match) => {
+                        var currentVersion = match.match(versionRegex)[0];
+                        if(!match.match(pluginVariables['IOS_FIREBASE_IN_APP_MESSAGING_VERSION'])){
+                            podFileContents = podFileContents.replace(match, match.replace(currentVersion, pluginVariables['IOS_FIREBASE_IN_APP_MESSAGING_VERSION']));
+                            podFileModified = true;
+                        }
+                    });
+                    if(podFileModified) utilities.log("Firebase iOS InAppMessaging SDK version set to v"+pluginVariables['IOS_FIREBASE_IN_APP_MESSAGING_VERSION']+" in Podfile");
+                }
+            }else{
+                throw new Error("The value \""+pluginVariables['IOS_FIREBASE_IN_APP_MESSAGING_VERSION']+"\" for IOS_FIREBASE_IN_APP_MESSAGING_VERSION is not a valid semantic version format")
+            }
+        }
 
         if(pluginVariables['IOS_FIREBASE_SDK_VERSION']){
             if(pluginVariables['IOS_FIREBASE_SDK_VERSION'].match(versionRegex)){
                 var matches = podFileContents.match(firebasePodRegex);
                 if(matches){
                     matches.forEach((match) => {
+                        if(match.match(inAppMessagingPodRegEx) && specifiedInAppMessagingVersion){
+                            return; // Skip Firebase In App Messaging pod if it was specified separately
+                        }
+
                         var currentVersion = match.match(versionRegex)[0];
                         if(!match.match(pluginVariables['IOS_FIREBASE_SDK_VERSION'])){
                             podFileContents = podFileContents.replace(match, match.replace(currentVersion, pluginVariables['IOS_FIREBASE_SDK_VERSION']));
                             podFileModified = true;
                         }
                     });
-                    if(podFileModified) utilities.log("Firebase iOS SDK version set to v"+pluginVariables['IOS_FIREBASE_SDK_VERSION']+" in Podfile");
                 }
+                var prebuiltFirestoreMatches = podFileContents.match(prebuiltFirestorePodRegEx);
+                if(prebuiltFirestoreMatches){
+                    prebuiltFirestoreMatches.forEach((match) => {
+                        var currentVersion = match.match(versionRegex)[0];
+                        if(!match.match(pluginVariables['IOS_FIREBASE_SDK_VERSION'])){
+                            podFileContents = podFileContents.replace(match, match.replace(currentVersion, pluginVariables['IOS_FIREBASE_SDK_VERSION']));
+                            podFileModified = true;
+                        }
+                    });
+                }
+                if(podFileModified) utilities.log("Firebase iOS SDK version set to v"+pluginVariables['IOS_FIREBASE_SDK_VERSION']+" in Podfile");
             }else{
-                throw new Error("The value \""+pluginVariables['IOS_FIREBASE_SDK_VERSION']+"\" for IOS_FIREBASE_SDK_VERSION is not a valid version in the format 'X.Y.Z'")
+                throw new Error("The value \""+pluginVariables['IOS_FIREBASE_SDK_VERSION']+"\" for IOS_FIREBASE_SDK_VERSION is not a valid semantic version format")
             }
         }
 
@@ -368,7 +494,7 @@ end
                     if(podFileModified) utilities.log("Google Sign In version set to v"+pluginVariables['IOS_GOOGLE_SIGIN_VERSION']+" in Podfile");
                 }
             }else{
-                throw new Error("The value \""+pluginVariables['IOS_GOOGLE_SIGIN_VERSION']+"\" for IOS_GOOGLE_SIGIN_VERSION is not a valid version in the format 'X.Y.Z'")
+                throw new Error("The value \""+pluginVariables['IOS_GOOGLE_SIGIN_VERSION']+"\" for IOS_GOOGLE_SIGIN_VERSION is not a valid semantic version format")
             }
         }
 
@@ -386,16 +512,20 @@ end
                     if(podFileModified) utilities.log("Google Tag Manager version set to v"+pluginVariables['IOS_GOOGLE_TAG_MANAGER_VERSION']+" in Podfile");
                 }
             }else{
-                throw new Error("The value \""+pluginVariables['IOS_GOOGLE_TAG_MANAGER_VERSION']+"\" for IOS_GOOGLE_TAG_MANAGER_VERSION is not a valid version in the format 'X.Y.Z'")
+                throw new Error("The value \""+pluginVariables['IOS_GOOGLE_TAG_MANAGER_VERSION']+"\" for IOS_GOOGLE_TAG_MANAGER_VERSION is not a valid semantic version format")
             }
         }
 
         if(pluginVariables['IOS_USE_PRECOMPILED_FIRESTORE_POD'] === 'true'){
-            var standardFirestorePodMatches = podFileContents.match(standardFirestorePodRegEx);
-            if(standardFirestorePodMatches){
-                podFileContents = podFileContents.replace(standardFirestorePodMatches[0], prebuiltFirestorePodTemplate.replace('{version}', standardFirestorePodMatches[1]));
-                podFileModified = true;
-                utilities.log("Configured Podfile for pre-built Firestore pod");
+            if(process.env.SKIP_FIREBASE_FIRESTORE_SWIFT){
+                var standardFirestorePodMatches = podFileContents.match(standardFirestorePodRegEx);
+                if(standardFirestorePodMatches){
+                    podFileContents = podFileContents.replace(standardFirestorePodMatches[0], prebuiltFirestorePodTemplate.replace('{version}', standardFirestorePodMatches[1]));
+                    podFileModified = true;
+                    utilities.log("Configured Podfile for pre-built Firestore pod");
+                }
+            }else{
+                throw new Error("The environment variable SKIP_FIREBASE_FIRESTORE_SWIFT is not set. This is required to use the pre-built Firestore pod.")
             }
         }
         if(podFileModified) {
@@ -405,10 +535,28 @@ end
         return podFileModified;
     },
     ensureEncodedAppIdInUrlSchemes: function (iosPlatform){
-        var googlePlist = plist.parse(fs.readFileSync(path.resolve(iosPlatform.dest), 'utf8')),
-            appPlist = plist.parse(fs.readFileSync(path.resolve(iosPlatform.appPlist), 'utf8')),
-            googleAppId = googlePlist["GOOGLE_APP_ID"],
-            encodedAppId = 'app-'+googleAppId.replace(/:/g,'-');
+        var googlePlistPath = path.resolve(iosPlatform.dest);
+        if(!fs.existsSync(googlePlistPath)){
+            utilities.warn(`Google plist not found at ${googlePlistPath}`);
+            return;
+        }
+
+        var appPlistPath = path.resolve(iosPlatform.appPlist);
+        if(!fs.existsSync(appPlistPath)){
+            utilities.warn(`App plist not found at ${appPlistPath}`);
+            return;
+        }
+
+        var googlePlist = plist.parse(fs.readFileSync(googlePlistPath, 'utf8')),
+            appPlist = plist.parse(fs.readFileSync(appPlistPath, 'utf8')),
+            googleAppId = googlePlist["GOOGLE_APP_ID"];
+
+        if(!googleAppId){
+            utilities.warn("Google App ID not found in Google plist");
+            return;
+        }
+
+        var encodedAppId = 'app-'+googleAppId.replace(/:/g,'-');
 
         var result = ensureUrlSchemeInPlist(encodedAppId, appPlist);
         if(result.modified){

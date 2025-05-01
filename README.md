@@ -242,6 +242,10 @@ Or you can manually edit the values in your project's `package.json` under `cord
 -   `FIREBASE_ANALYTICS_WITHOUT_ADS` - whether to disable advertising ID collection in Analytics. Defaults to false.
     -   Note that this is a [post-install plugin variable](#post-install-plugin-variables) so an additional step is required to activate the plugin variable the first time it is specified.
         See [Disable data collection on startup](#disable-data-collection-on-startup) for more info.
+-   `FIREBASE_MESSAGING_IMMEDIATE_PAYLOAD_DELIVERY` - whether to deliver FCM messages immediately when the app is in the background. Defaults to false.
+  - If false, messages that arrive while the app is in the background/inactive are queued and delivered when the app is next brought to the foreground.
+  - If true, messages are delivered immediately when received, even if the app is in the background/inactive.
+    - Note: on modern iOS and Android devices, there is no guarantee that the message will be successfully delivered to the app because the OS may have paused the app's Cordova Webview process or the Webview may not exist at the time the message is received.
 -   `GOOGLE_ANALYTICS_ADID_COLLECTION_ENABLED` - determines whether Google Analytics collects Advertising IDs (ADIDs) for ad targeting and attribution purposes. If set to true, Google Analytics will collect ADIDs; if set to false, it will not collect ADIDs. Defaults to true.
 -   `GOOGLE_ANALYTICS_DEFAULT_ALLOW_ANALYTICS_STORAGE` - specifies the default setting for allowing Google Analytics to store analytics data. If set to true, Google Analytics is allowed to store analytics data; if set to false, it is not allowed to store analytics data by default.
 -   `GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_STORAGE` - specifies the default setting for allowing Google Analytics to store ad-related data. If set to true, Google Analytics is allowed to store ad-related data; if set to false, it is not allowed to store ad-related data by default. Defaults to true.
@@ -281,41 +285,45 @@ The following plugin variables are used to specify the Firebase SDK versions as 
 
 ### iOS only
 
--   `IOS_FIREBASE_SDK_VERSION` - a specific version of the Firebase iOS SDK to set in the Podfile
-    -   If not specified, the default version defined in `<pod>` elements in the `plugin.xml` will be used.
--   `IOS_GOOGLE_SIGIN_VERSION` - a specific version of the Google Sign In library to set in the Podfile
+- `IOS_FIREBASE_SDK_VERSION` - a specific version of the Firebase iOS SDK to set in the Podfile
+    - If not specified, the default version defined in `<pod>` elements in the `plugin.xml` will be used.
+- `IOS_FIREBASE_IN_APP_MESSAGING_VERSION` - a specific version of the Firebase iOS InAppMessaging SDK to set in the Podfile
+    - If not specified, the default version defined in `<pod>` elements in the `plugin.xml` will be used.
+- `IOS_GOOGLE_SIGIN_VERSION` - a specific version of the Google Sign In library to set in the Podfile
     -   If not specified, the default version defined in the `<pod>` element in the `plugin.xml` will be used.
--   `IOS_GOOGLE_TAG_MANAGER_VERSION` - a specific version of the Google Tag Manager library to set in the Podfile
+- `IOS_GOOGLE_TAG_MANAGER_VERSION` - a specific version of the Google Tag Manager library to set in the Podfile
     -   If not specified, the default version defined in the `<pod>` element in the `plugin.xml` will be used.
--   `IOS_USE_PRECOMPILED_FIRESTORE_POD` - if `true`, switches Podfile to use a [pre-compiled version of the Firestore pod](https://github.com/invertase/firestore-ios-sdk-frameworks.git) to reduce build time
-    -   Since some users experienced long build times due to the Firestore pod (see [#407](https://github.com/dpa99c/cordova-plugin-firebasex/issues/407))
-    -   However other users have experienced build issues with the pre-compiled version (see [#735](https://github.com/dpa99c/cordova-plugin-firebasex/issues/735))
-    -   Defaults to `false` if not specified.
-    -   Note that this is a [post-install plugin variable](#post-install-plugin-variables) so an additional step is required to activate the plugin variable the first time it is specified.
--   `IOS_STRIP_DEBUG` - prevents symbolification of all libraries included via Cocoapods. See [Strip debug symbols](#strip-debug-symbols) for more info.
+- `IOS_USE_PRECOMPILED_FIRESTORE_POD` - if `true`, switches Podfile to use a [pre-compiled version of the Firestore pod](https://github.com/invertase/firestore-ios-sdk-frameworks.git) to reduce build time
+    - Defaults to `false` if not specified.
+    - If you set this option to `true`, you must ensure the environment variable `SKIP_FIREBASE_FIRESTORE_SWIFT` is set **globally** to a truthy value
+      - e.g. If using zsh: `echo 'export SKIP_FIREBASE_FIRESTORE_SWIFT=1' >> ~/.zshrc && source ~/.zshrc`
+      - This ensures the pre-built pod is compatible with the Cordova project environment ([see here](https://github.com/invertase/firestore-ios-sdk-frameworks/issues/62))
+    - Note that this is a [post-install plugin variable](#post-install-plugin-variables) so an additional step is required to activate the plugin variable the first time it is specified.
+    - If you're having issues building with Firestore, [see here](https://github.com/dpa99c/cordova-plugin-firebasex/wiki#ios-using-pre-built-firestore-pod) for suggested solutions.
+- `IOS_STRIP_DEBUG` - prevents symbolification of all libraries included via Cocoapods. See [Strip debug symbols](#strip-debug-symbols) for more info.
     -   e.g. `--variable IOS_STRIP_DEBUG=true`
     -   Defaults to `false` if not specified.
--   `SETUP_RECAPTCHA_VERIFICATION` - automatically sets up reCAPTCHA verification for phone authentication on iOS. See [verifyPhoneNumber](#verifyphonenumber) for more info.
+- `SETUP_RECAPTCHA_VERIFICATION` - automatically sets up reCAPTCHA verification for phone authentication on iOS. See [verifyPhoneNumber](#verifyphonenumber) for more info.
     -   e.g. `--variable SETUP_RECAPTCHA_VERIFICATION=true`
     -   Defaults to `false` if not specified.
--   `IOS_SHOULD_ESTABLISH_DIRECT_CHANNEL` - If `true` Firebase Messaging will automatically establish a socket-based, direct channel to the FCM server.
+- `IOS_SHOULD_ESTABLISH_DIRECT_CHANNEL` - If `true` Firebase Messaging will automatically establish a socket-based, direct channel to the FCM server.
     -   e.g. `--variable IOS_SHOULD_ESTABLISH_DIRECT_CHANNEL=true`
     -   Defaults to `false` if not specified.
     -   See [`shouldEstablishDirectChannel`](<https://firebase.google.com/docs/reference/ios/firebasemessaging/api/reference/Classes/FIRMessaging#/c:objc(cs)FIRMessaging(py)shouldEstablishDirectChannel>)
     -   Note: Firebase Messaging iOS SDK version 7.0 will be a breaking change where the SDK will no longer support iOS Direct Channel API.
--   `IOS_FIREBASE_CONFIG_FILEPATH` - sets a custom filepath to `GoogleService-Info.plist` file as a path relative to the project root
+- `IOS_FIREBASE_CONFIG_FILEPATH` - sets a custom filepath to `GoogleService-Info.plist` file as a path relative to the project root
     -   e.g. `--variable IOS_FIREBASE_CONFIG_FILEPATH="resources/ios/GoogleService-Info.plist"`
--   `IOS_ENABLE_APPLE_SIGNIN` - enables the Sign In with Apple capability in Xcode.
+- `IOS_ENABLE_APPLE_SIGNIN` - enables the Sign In with Apple capability in Xcode.
     -   `--variable IOS_ENABLE_APPLE_SIGNIN=true`
     -   Ensure the associated app provisioning profile also has this capability enabled.
--   `IOS_ENABLE_CRITICAL_ALERTS_ENABLED` - enables the critical alerts capability
+- `IOS_ENABLE_CRITICAL_ALERTS_ENABLED` - enables the critical alerts capability
     -   `--variable IOS_ENABLE_CRITICAL_ALERTS_ENABLED=true`
     -   See [iOS critical notifications](#ios-critical-notifications)
     -   Ensure the associated app provisioning profile also has this capability enabled.
--   `IOS_FCM_ENABLED` - allows to completely disable push notifications functionality of the plugin (not just the automatic initialization that is covered by `FIREBASE_FCM_AUTOINIT_ENABLED` variable).
+- `IOS_FCM_ENABLED` - allows to completely disable push notifications functionality of the plugin (not just the automatic initialization that is covered by `FIREBASE_FCM_AUTOINIT_ENABLED` variable).
     -   Defaults to `true`, if not specified; i.e. FCM is enabled by default.
     -   This can be handy if you are using this plugin for e.g. Crashlytics and handle push notifications using another plugin. Use `--variable IOS_FCM_ENABLED=false` in this case.
--   `IOS_ON_DEVICE_CONVERSION_ANALYTICS` - whether to include the On-Device Conversion component of the Firebase SDK.
+- `IOS_ON_DEVICE_CONVERSION_ANALYTICS` - whether to include the On-Device Conversion component of the Firebase SDK.
     -   Defaults to `false` if not specified.
     -   If `true`, the component will be included and [initiateOnDeviceConversionMeasurement](#initiateondeviceconversionmeasurement) can be called at run-time to enable it.
     -   Note that this is a [post-install plugin variable](#post-install-plugin-variables) so an additional step is required to activate the plugin variable the first time it is specified.
@@ -596,6 +604,31 @@ If you receive a build error such as this:
 
 Make sure your local Cocoapods repo is up-to-date by running `pod repo update` then run `pod install` in `/your_project/platforms/ios/`.
 
+### Set up project to automatically upload dSYM files
+Firebase Documentation [Get started with Firebase Crashlytics](https://firebase.google.com/docs/crashlytics/get-started?platform=ios#set-up-dsym-uploading)
+
+Make sure `cordova-plugin-firebasex` is last plugin in cordova section of your package.json
+
+```json
+{
+    ...
+    "cordova": {
+        "platforms": [
+            "browser",
+            "ios",
+            "android"
+        ],
+        "plugins": {
+            ...
+            "cordova-plugin-firebasex": {
+                ...
+            }
+        }
+    },
+    ....
+}
+```
+
 ### Strip debug symbols
 
 If your iOS app build contains too many debug symbols (i.e. because you include lots of libraries via a Cocoapods), you might get an error (e.g. [issue #28](https://github.com/dpa99c/cordova-plugin-firebase/issues/28)) when you upload your binary to App Store Connect, e.g.:
@@ -606,47 +639,17 @@ To prevent this, you can set the `IOS_STRIP_DEBUG` plugin variable which prevent
 
     cordova plugin add cordova-plugin-firebasex --variable IOS_STRIP_DEBUG=true
 
-By default this preference is set to `false`.
+By default, this preference is set to `false`.
 
 Note: if you enable this setting, any crashes that occur within libraries included via Cocopods will not be recorded in Crashlytics or other crash reporting services.
 
 ### Cordova CLI builds
 
-If you are building (directly or indirectly) via the Cordova CLI and a build failures on iOS such as the one below:
+- Older versions of the Firebase Inapp Messaging SDK and Google Tag Manager SDK components caused [build issues]((https://github.com/apache/cordova-ios/issues/659)) when building via the Cordova CLI.
+- Therefore, the `cli_build` branch was kept in sync with `master` but without the above components.
+- However, in recent versions, the Firebase Inapp Messaging SDK and Google Tag Manager SDK components no longer cause build issues when building via the Cordova CLI.
+- Therefore, the `cli_build` branch is no longer maintained and the `master` branch should be used for Cordova CLI builds.
 
-    error: Resource "/Build/Products/Debug-iphonesimulator/FirebaseInAppMessaging/InAppMessagingDisplayResources.bundle" not found. Run 'pod install' to update the copy resources script.
-
-This is likely due to [an issue with Cordova CLI builds for iOS](https://github.com/apache/cordova-ios/issues/659) when including certain pods into the build (see [#326](https://github.com/dpa99c/cordova-plugin-firebasex/issues/326)):
-
-Note that building from Xcode works fine, so if you are able then do this.
-
-Otherwise (e.g. if building via a CI) then you'll need to switch to using the [cli_build branch](https://github.com/dpa99c/cordova-plugin-firebasex/tree/cli_build) of this plugin:
-
-    cordova plugin rm cordova-plugin-firebasex && cordova plugin add cordova-plugin-firebasex@latest-cli
-
-This removes the Firebase Inapp Messaging and Google Tag Manager SDK components that are causing the build issues.
-The `cli_build` branch is kept in sync with `master` but without the above components.
-
-You can validate your CLI build environment using [this publicly-available `GoogleService-Info.plist`](https://github.coventry.ac.uk/301CEM-1920OCTJAN/301CEM-6957713/raw/master/CanaryApparel/GoogleService-Info.plist):
-
-    cordova create test com.canary.CanaryApparel && cd test
-    curl https://github.coventry.ac.uk/raw/301CEM-1920OCTJAN/301CEM-6957713/master/CanaryApparel/GoogleService-Info.plist -o GoogleService-Info.plist
-    cordova plugin add cordova-plugin-firebasex@latest-cli
-    cordova platform add ios
-    cordova build ios --emulator
-    #build succeeds
-
-Following the installation steps above, modify the `package.json` file to pin the `cli` variant of this package by removing the `^` or `~` prefix from the package declaration. Failure to do this will result in build issues the next time the `cordova prepare` steps are performed as the non-cli version of the package will replace the cli variant.
-
-```
-  "dependencies": {
-    "cordova-android": "~8.1.0",
-    "cordova-ios": "^6.1.0",
-    "cordova-plugin-androidx": "^2.0.0",
-    "cordova-plugin-androidx-adapter": "^1.1.1",
-    "cordova-plugin-firebasex": "^10.1.2-cli" --> Change to "10.1.2-cli"
-  },
-```
 
 # Firebase config setup
 
@@ -811,12 +814,12 @@ Note: only notification messages can be sent via the Firebase Console - data mes
 
 If the notification message arrives while the app is in the background/not running, it will be displayed as a system notification.
 
-By default, no callback is made to the plugin when the message arrives while the app is not in the foreground, since the display of the notification is entirely handled by the operating system.
-However, there are platform-specific circumstances where a callback can be made when the message arrives and the app is in the background that don't require user interaction to receive the message payload - see [Android background notifications](#android-background-notifications) and [iOS background notifications](#ios-background-notifications) for details.
-
 If the user taps the system notification, this launches/resumes the app and the notification title, body and optional data payload is passed to the [onMessageReceived](#onMessageReceived) callback.
-
 When the `onMessageReceived` is called in response to a user tapping a system notification while the app is in the background/not running, it will be passed the property `tap: "background"`.
+
+By default, no callback is made to the plugin when the message arrives while the app is not in the foreground, since the display of the notification is entirely handled by the operating system.
+However, there are platform-specific circumstances where a callback can be made, when a message arrives while the app is in the background or is inactive, that doesn't require user interaction to receive the message payload - see [Android background notifications](#android-background-notifications) and [iOS background notifications](#ios-background-notifications) for details.
+
 
 ## Foreground notifications
 
@@ -851,9 +854,17 @@ Notifications on Android can be customised to specify the sound, icon, LED colou
 
 If the notification message arrives while the app is in the background/not running, it will be displayed as a system notification.
 
-If a notification message arrives while the app is in the background but is still running (i.e. has not been task-killed) and the device is not in power-saving mode, the `onMessageReceived` callback will be invoked without the `tap` property, indicating the message was received without user interaction.
-
 If the user then taps the system notification, the app will be brought to the foreground and `onMessageReceived` will be invoked **again**, this time with `tap: "background"` indicating that the user tapped the system notification while the app was in the background.
+
+If a notification message arrives while the app is in the background or inactive, it will be queued until the next time the app is resumed into the foreground. This is to ensure the Cordova application running in the Webview is in a state where it can receive the notification message.
+Upon resuming, each queued notification will be sent to the `onMessageReceived` callback without the `tap` property, indicating the message was received without user interaction.
+
+If you wish to attempt to immediately deliver the message payload to the `onMessageReceived` callback when the app is in the background or inactive (the default behaviour of this plugin prior to v18), you can set the `FIREBASE_MESSAGING_IMMEDIATE_PAYLOAD_DELIVERY` plugin variable to `true` at plugin install time:
+
+    cordova plugin add cordova-plugin-firebasex --variable FIREBASE_MESSAGING_IMMEDIATE_PAYLOAD_DELIVERY=true
+
+However there is no guarantee that the message will be delivered successfully, since the Cordova application running in the Webview may not be in a state where it can receive the notification message.
+
 
 In addition to the title and body of the notification message, Android system notifications support specification of the following notification settings:
 
@@ -1251,10 +1262,19 @@ For example:
 
 ### iOS background notifications
 
-If the app is in the background but is still running (i.e. has not been task-killed) and the device is not in power-saving mode, the `onMessageReceived` callback can be invoked when the message arrives without requiring user interaction (i.e. tapping the system notification).
-To do this you must specify `"content-available": 1` in the `apns.payload.aps` section of the message payload - see the [Apple documentation](https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/CreatingtheNotificationPayload.html#//apple_ref/doc/uid/TP40008194-CH10-SW8) for more information.
-When the message arrives, the `onMessageReceived` callback will be invoked without the `tap` property, indicating the message was received without user interaction.
+If the notification message arrives while the app is in the background/not running, it will be displayed as a system notification.
+
 If the user then taps the system notification, the app will be brought to the foreground and `onMessageReceived` will be invoked **again**, this time with `tap: "background"` indicating that the user tapped the system notification while the app was in the background.
+
+If the app is in the background or inactive when the notification message arrives, the message can be queued so that the next time the app is resumed from the background, the `onMessageReceived` callback is invoked with the notification payload without requiring user interaction (i.e. tapping the system notification).
+To do this you must specify `"content-available": 1` in the `apns.payload.aps` section of the message payload - see the [Apple documentation](https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/CreatingtheNotificationPayload.html#//apple_ref/doc/uid/TP40008194-CH10-SW8) for more information.
+When app is next launched/resumed from the background, any queued notification payloads will be sent to the `onMessageReceived` callback without the `tap` property, indicating the message was received without user interaction.
+
+If you wish to attempt to immediately deliver the message payload to the `onMessageReceived` callback when the app is in the background or inactive (the default behaviour of this plugin prior to v18), you can set the `FIREBASE_MESSAGING_IMMEDIATE_PAYLOAD_DELIVERY` plugin variable to `true` at plugin install time:
+
+    cordova plugin add cordova-plugin-firebasex --variable FIREBASE_MESSAGING_IMMEDIATE_PAYLOAD_DELIVERY=true
+
+However there is no guarantee that the message will be delivered successfully, since the Cordova application running in the Webview may not be in a state where it can receive the notification message.
 
 ### iOS notification sound
 
@@ -1637,24 +1657,77 @@ See the [iOS](https://firebase.google.com/docs/in-app-messaging/get-started?plat
 
 # Google Tag Manager
 
-Download your container-config json file from Tag Manager and add a `<resource-file>` node in your `config.xml`.
+https://developers.google.com/tag-platform/tag-manager/mobile
 
 ## Android
 
+1. Create directory `resources/android/containers`
+
+1. Download your container-config json file from Tag Manager and add a `<resource-file>` node in your `config.xml`.
+
 ```xml
 <platform name="android">
-    <resource-file src="GTM-XXXXXXX.json" target="assets/containers/GTM-XXXXXXX.json" />
+    <resource-file src="resources/android/containers/GTM-XXXXXXX.json" target="app/src/main/assets/containers/GTM-XXXXXXX.json" />
+    ...
+```
+
+### Preview mode (optional)
+(More info)[https://developers.google.com/tag-platform/tag-manager/android/v5#preview_container]
+
+```xml
+<platform name="android">
+  <config-file parent="/manifest/application" target="AndroidManifest.xml">
+    <activity android:exported="true" android:name="com.google.android.gms.tagmanager.TagManagerPreviewActivity" android:noHistory="true" tools:replace="android:noHistory">
+      <intent-filter>
+        <data android:scheme="tagmanager.c.{{BUNDLE_ID}}" />
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+      </intent-filter>
+    </activity>
+  </config-file>
     ...
 ```
 
 ## iOS
 
+The application name should not contain spaces
+
 ```xml
-<platform name="ios">
-    <resource-file src="GTM-YYYYYYY.json" />
-    ...
+
+<name short="Cordova App">CordovaApp</name>
+
 ```
 
+1. Create directory `resources/ios/container`
+
+1. Download your container-config json file from Tag Manager and to directory.
+
+### Preview mode (optional)
+(More info)[https://developers.google.com/tag-platform/tag-manager/ios/v5#preview_container]
+
+1. Add `xmlns:tools="http://schemas.android.com/tools"` to  `<widget>` tag
+
+1. Add to config.xml
+
+```xml
+<platform name="ios">
+  <edit-config file="*-Info.plist" mode="merge" target="CFBundleURLTypes">
+    <array>
+      <dict>
+        <key>CFBundleURLName</key>
+        <string>{{BUNDLE_ID}}</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>tagmanager.c.{{BUNDLE_ID}}</string>
+        </array>
+      </dict>
+    </array>
+  </edit-config>
+    ...
+</platform>
+
+```
 # Performance Monitoring
 
 The [Firebase Performance Monitoring SDK](https://firebase.google.com/docs/perf-mon) enables you to measure, monitor and analyze the performance of your app in the Firebase console.

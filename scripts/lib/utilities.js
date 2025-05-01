@@ -61,9 +61,19 @@ Utilities.writeJsonToXmlFile = function(jsonObj, filepath, parseOpts){
 };
 
 /**
- * Used to get the name of the application as defined in the config.xml.
+ * Used to get the name of the application from the xcodeCordovaProj directory path.
+ * The xcodeCordovaProj directory path is defined in the locations property of the Cordova-iOS platform's API.
  */
 Utilities.getAppName = function(){
+    if(_context.opts.cordova.platforms.indexOf('ios') !== -1){
+        const projectRoot = _context.opts.projectRoot;
+        const platformPath = path.join(projectRoot, 'platforms', 'ios');
+        const cordova_ios = require('cordova-ios');
+        const iosProject = new cordova_ios('ios', platformPath);
+
+        return path.basename(iosProject.locations.xcodeCordovaProj);
+    }
+    // other platforms
     return Utilities.parseConfigXml().widget.name._text.toString().trim();
 };
 
@@ -167,6 +177,14 @@ Utilities.directoryExists = function(dirPath){
 
 Utilities.log = function(msg){
     console.log(Utilities.getPluginId()+': '+msg);
+};
+
+Utilities.warn = function(msg){
+    console.warn(Utilities.getPluginId()+': '+msg);
+};
+
+Utilities.error = function(msg){
+    console.error(Utilities.getPluginId()+': '+msg);
 };
 
 module.exports = Utilities;
