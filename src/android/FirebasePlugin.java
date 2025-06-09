@@ -193,6 +193,8 @@ public class FirebasePlugin extends CordovaPlugin {
 
     private MultiFactorResolver multiFactorResolver = null;
 
+    private static final Object notificationStackLock = new Object();
+
     @Override
     protected void pluginInitialize() {
         instance = this;
@@ -675,15 +677,21 @@ public class FirebasePlugin extends CordovaPlugin {
         sendPendingNotifications();
     }
 
-    private synchronized void sendPendingNotifications() {
-        if (FirebasePlugin.notificationStack != null) {
+    private void sendPendingNotifications() {
+        ArrayList<Bundle> notificationsCopy = null;
+        synchronized (notificationStackLock) {
+            if (FirebasePlugin.notificationStack != null && !FirebasePlugin.notificationStack.isEmpty()) {
+                notificationsCopy = new ArrayList<>(FirebasePlugin.notificationStack);
+                FirebasePlugin.notificationStack.clear();
+            }
+        }
+        if (notificationsCopy != null) {
             this.cordova.getThreadPool().execute(new Runnable() {
                 public void run() {
                     try {
-                        for (Bundle bundle : FirebasePlugin.notificationStack) {
+                        for (Bundle bundle : notificationsCopy) {
                             FirebasePlugin.sendMessage(bundle, applicationContext);
                         }
-                        FirebasePlugin.notificationStack.clear();
                     } catch (Exception e) {
                         handleExceptionWithoutContext(e);
                     }
@@ -729,11 +737,12 @@ public class FirebasePlugin extends CordovaPlugin {
     public static void sendMessage(Bundle bundle, Context context) {
         if (!FirebasePlugin.hasNotificationsCallback() || (inBackground && !immediateMessagePayloadDelivery)) {
             String packageName = context.getPackageName();
-            if (FirebasePlugin.notificationStack == null) {
-                FirebasePlugin.notificationStack = new ArrayList<Bundle>();
+            synchronized (notificationStackLock) {
+                if (FirebasePlugin.notificationStack == null) {
+                    FirebasePlugin.notificationStack = new ArrayList<Bundle>();
+                }
+                notificationStack.add(bundle);
             }
-            notificationStack.add(bundle);
-
             return;
         }
 
