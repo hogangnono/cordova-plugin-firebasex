@@ -678,11 +678,13 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     private void sendPendingNotifications() {
-        ArrayList<Bundle> notificationsCopy = null;
+        final ArrayList<Bundle> notificationsCopy;
         synchronized (notificationStackLock) {
             if (FirebasePlugin.notificationStack != null && !FirebasePlugin.notificationStack.isEmpty()) {
                 notificationsCopy = new ArrayList<>(FirebasePlugin.notificationStack);
                 FirebasePlugin.notificationStack.clear();
+            } else {
+                notificationsCopy = null;
             }
         }
         if (notificationsCopy != null) {
