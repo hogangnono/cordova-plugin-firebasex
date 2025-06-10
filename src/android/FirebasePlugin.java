@@ -266,14 +266,16 @@ public class FirebasePlugin extends CordovaPlugin {
                             .create();
 
                     if (extras != null && extras.size() > 1) {
-                        if (FirebasePlugin.notificationStack == null) {
-                            FirebasePlugin.notificationStack = new ArrayList<Bundle>();
-                        }
-                        if (extras.containsKey("google.message_id")) {
-                            extras.putString("messageType", "notification");
-                            extras.putString("tap", "background");
-                            notificationStack.add(extras);
-                            Log.d(TAG, "Notification message found on init: " + extras.toString());
+                        synchronized (FirebasePlugin.notificationStackLock) {
+                            if (FirebasePlugin.notificationStack == null) {
+                                FirebasePlugin.notificationStack = new ArrayList<Bundle>();
+                            }
+                            if (extras.containsKey("google.message_id")) {
+                                extras.putString("messageType", "notification");
+                                extras.putString("tap", "background");
+                                notificationStack.add(extras);
+                                Log.d(TAG, "Notification message found on init: " + extras.toString());
+                            }
                         }
                     }
                     defaultChannelId = getStringResource("default_notification_channel_id");
