@@ -333,7 +333,7 @@ static NSMutableArray* pendingGlobalJS = nil;
         [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
             @try {
                 BOOL enabled = NO;
-                if (settings.alertSetting == UNNotificationSettingEnabled) {
+                if (settings.authorizationStatus == UNAuthorizationStatusAuthorized) {
                     enabled = YES;
                     [self registerForRemoteNotifications];
                 }
