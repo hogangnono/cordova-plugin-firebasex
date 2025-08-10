@@ -127,6 +127,8 @@
 
 		<preference name="IOS_USE_PRECOMPILED_FIRESTORE_POD" default="false" />
 		<preference name="IOS_FCM_ENABLED" default="true" />
+		<preference name="IOS_NOTIFICATION_SERVICE_ENABLED" default="true" />
+		<preference name="IOS_NOTIFICATION_CONTENT_ENABLED" default="true" />
 
 		<js-module name="FirebasePlugin" src="www/firebase.js">
 			<clobbers target="FirebasePlugin" />
@@ -167,6 +169,10 @@
 		<source-file src="src/ios/FirebasePluginMessageReceiver.m" />
 		<header-file src="src/ios/FirebasePluginMessageReceiverManager.h" />
 		<source-file src="src/ios/FirebasePluginMessageReceiverManager.m" />
+
+		<!-- Notification Extensions -->
+		<source-file src="src/ios/NotificationService.swift" />
+		<source-file src="src/ios/NotificationViewController.swift" />
 
 		<framework src="AuthenticationServices.framework" />
 

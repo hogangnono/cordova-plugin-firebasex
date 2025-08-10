@@ -562,5 +562,1093 @@ end
         if(result.modified){
             fs.writeFileSync(path.resolve(iosPlatform.appPlist), plist.build(result.plist));
         }
+    },
+
+    /**
+     * Notification Service Extension과 Content Extension을 설정합니다.
+     */
+    setupNotificationExtensions: function(context, xcodeProjectPath) {
+        try {
+            var xcodeProject = xcode.project(xcodeProjectPath);
+            xcodeProject.parseSync();
+
+            var appName = utilities.getAppName();
+            var bundleId = this.getBundleId(context);
+
+            utilities.log("Setting up notification extensions for app: " + appName + " with bundle ID: " + bundleId);
+
+            // 메인 앱에서 Extension 파일들 제거 (중복 방지)
+            this.removeExtensionFilesFromMainApp(xcodeProject, appName);
+
+            // Notification Service Extension 설정
+            if (this.shouldSetupNotificationService(context)) {
+                if (!this.extensionExists(xcodeProject, "NotificationService")) {
+                    utilities.log("Creating Notification Service Extension...");
+                    this.createNotificationServiceExtension(context, xcodeProject, appName, bundleId);
+                } else {
+                    utilities.log("Notification Service Extension already exists, skipping creation");
+                }
+            } else {
+                utilities.log("Notification Service Extension is disabled");
+            }
+
+            // Notification Content Extension 설정
+            if (this.shouldSetupNotificationContent(context)) {
+                if (!this.extensionExists(xcodeProject, "NotificationContent")) {
+                    utilities.log("Creating Notification Content Extension...");
+                    this.createNotificationContentExtension(context, xcodeProject, appName, bundleId);
+                } else {
+                    utilities.log("Notification Content Extension already exists, skipping creation");
+                }
+            } else {
+                utilities.log("Notification Content Extension is disabled");
+            }
+
+            // 프로젝트 파일 저장
+            fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
+            utilities.log("Notification extensions setup completed successfully");
+
+        } catch (error) {
+            utilities.error("Failed to setup notification extensions: " + error.message);
+            throw error;
+        }
+    },
+
+    extensionExists: function(xcodeProject, extensionName) {
+        // Extension Target이 이미 존재하는지 확인
+        var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
+        for (var targetId in targets) {
+            if (targetId.indexOf("_comment") === -1) {
+                var target = targets[targetId];
+                if (target.name === extensionName) {
+                    return true;
+                }
+            }
+        }
+
+        // Extension 디렉토리가 존재하는지 확인
+        var appName = utilities.getAppName();
+        var extensionDir = path.join("platforms", "ios", appName, extensionName);
+        if (fs.existsSync(extensionDir)) {
+            return true;
+        }
+
+        return false;
+    },
+
+    shouldSetupNotificationService: function(context) {
+        try {
+            // 여러 방법으로 플러그인 변수에 접근 시도
+            var pluginVariables = null;
+
+            if (context.opts.plugin && context.opts.plugin.pluginInfo && context.opts.plugin.pluginInfo._et && context.opts.plugin.pluginInfo._et._configs) {
+                pluginVariables = context.opts.plugin.pluginInfo._et._configs['cordova-plugin-firebasex'];
+            }
+
+            if (!pluginVariables && context.opts.plugin && context.opts.plugin.pluginInfo && context.opts.plugin.pluginInfo.variables) {
+                pluginVariables = context.opts.plugin.pluginInfo.variables;
+            }
+
+            if (!pluginVariables && context.opts.plugin && context.opts.plugin.pluginInfo && context.opts.plugin.pluginInfo._et && context.opts.plugin.pluginInfo._et.variables) {
+                pluginVariables = context.opts.plugin.pluginInfo._et.variables;
+            }
+
+            // 기본값으로 true 반환 (Extension 활성화)
+            var result = true;
+            if (pluginVariables && pluginVariables['IOS_NOTIFICATION_SERVICE_ENABLED'] !== undefined) {
+                result = pluginVariables['IOS_NOTIFICATION_SERVICE_ENABLED'] === 'true';
+            }
+
+            utilities.log("shouldSetupNotificationService: " + result + " (pluginVariables: " + JSON.stringify(pluginVariables) + ")");
+            return result;
+        } catch (error) {
+            utilities.error("Error in shouldSetupNotificationService: " + error.message);
+            // 에러 발생 시 기본값으로 true 반환
+            return true;
+        }
+    },
+
+    shouldSetupNotificationContent: function(context) {
+        try {
+            // 여러 방법으로 플러그인 변수에 접근 시도
+            var pluginVariables = null;
+
+            if (context.opts.plugin && context.opts.plugin.pluginInfo && context.opts.plugin.pluginInfo._et && context.opts.plugin.pluginInfo._et._configs) {
+                pluginVariables = context.opts.plugin.pluginInfo._et._configs['cordova-plugin-firebasex'];
+            }
+
+            if (!pluginVariables && context.opts.plugin && context.opts.plugin.pluginInfo && context.opts.plugin.pluginInfo.variables) {
+                pluginVariables = context.opts.plugin.pluginInfo.variables;
+            }
+
+            if (!pluginVariables && context.opts.plugin && context.opts.plugin.pluginInfo && context.opts.plugin.pluginInfo._et && context.opts.plugin.pluginInfo._et.variables) {
+                pluginVariables = context.opts.plugin.pluginInfo._et.variables;
+            }
+
+            // 기본값으로 true 반환 (Extension 활성화)
+            var result = true;
+            if (pluginVariables && pluginVariables['IOS_NOTIFICATION_CONTENT_ENABLED'] !== undefined) {
+                result = pluginVariables['IOS_NOTIFICATION_CONTENT_ENABLED'] === 'true';
+            }
+
+            utilities.log("shouldSetupNotificationContent: " + result + " (pluginVariables: " + JSON.stringify(pluginVariables) + ")");
+            return result;
+        } catch (error) {
+            utilities.error("Error in shouldSetupNotificationContent: " + error.message);
+            // 에러 발생 시 기본값으로 true 반환
+            return true;
+        }
+    },
+
+    getBundleId: function(context) {
+        try {
+            var configXml = utilities.parseConfigXml();
+            utilities.log("Config XML parsed: " + JSON.stringify(configXml));
+
+            if (!configXml || !configXml.widget) {
+                utilities.error("Config XML or widget not found");
+                // 기본 Bundle ID 반환
+                return "com.hogangnono.hogangnono";
+            }
+
+            if (!configXml.widget.$ || !configXml.widget.$.id) {
+                utilities.error("Widget ID not found in config XML");
+                // 기본 Bundle ID 반환
+                return "com.hogangnono.hogangnono";
+            }
+
+            var bundleId = configXml.widget.$.id;
+            utilities.log("Bundle ID: " + bundleId);
+            return bundleId;
+        } catch (error) {
+            utilities.error("Error getting bundle ID: " + error.message);
+            // 에러 발생 시 기본 Bundle ID 반환
+            return "com.hogangnono.hogangnono";
+        }
+    },
+
+    createNotificationServiceExtension: function(context, xcodeProject, appName, bundleId) {
+        var EXTENSION_TYPE = "NotificationService";
+        var extensionName = EXTENSION_TYPE;
+        var extensionBundleId = bundleId + "." + EXTENSION_TYPE;
+
+        utilities.log("Setting up Notification Service Extension: " + extensionName);
+
+        // Extension 디렉토리 생성
+        var extensionDir = path.join("platforms", "ios", appName, extensionName);
+        if (!fs.existsSync(extensionDir)) {
+            fs.mkdirSync(extensionDir, { recursive: true });
+        }
+
+        // Info.plist 생성
+        this.createExtensionInfoPlist(extensionDir, extensionName, extensionBundleId, EXTENSION_TYPE);
+
+        // 소스 파일 복사
+        this.copyExtensionSourceFiles(context, extensionDir, extensionName);
+
+        // Extension Target 생성
+        var extensionTargetId = xcodeProject.generateUuid();
+        var extensionProductId = xcodeProject.generateUuid();
+        var extensionGroupId = xcodeProject.generateUuid();
+        var extensionBuildConfigId = xcodeProject.generateUuid();
+        var extensionSourcesPhaseId = xcodeProject.generateUuid();
+        var extensionFrameworksPhaseId = xcodeProject.generateUuid();
+        var extensionResourcesPhaseId = xcodeProject.generateUuid();
+        var extensionInfoPlistId = xcodeProject.generateUuid();
+        var extensionSwiftFileId = xcodeProject.generateUuid();
+        var extensionBuildFileId = xcodeProject.generateUuid();
+        var extensionSwiftBuildFileId = xcodeProject.generateUuid();
+
+        // PBXFileReference 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXFileReference) {
+            xcodeProject.hash.project.objects.PBXFileReference = {};
+        }
+
+        // PBXBuildFile 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXBuildFile) {
+            xcodeProject.hash.project.objects.PBXBuildFile = {};
+        }
+
+        // PBXSourcesBuildPhase 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXSourcesBuildPhase) {
+            xcodeProject.hash.project.objects.PBXSourcesBuildPhase = {};
+        }
+
+        // PBXFrameworksBuildPhase 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXFrameworksBuildPhase) {
+            xcodeProject.hash.project.objects.PBXFrameworksBuildPhase = {};
+        }
+
+        // PBXResourcesBuildPhase 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXResourcesBuildPhase) {
+            xcodeProject.hash.project.objects.PBXResourcesBuildPhase = {};
+        }
+
+        // XCBuildConfigurationList 객체 초기화
+        if (!xcodeProject.hash.project.objects.XCBuildConfigurationList) {
+            xcodeProject.hash.project.objects.XCBuildConfigurationList = {};
+        }
+
+        xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId] = {
+            isa: "XCBuildConfigurationList",
+            buildConfigurations: [
+                {
+                    value: xcodeProject.generateUuid(),
+                    comment: "Debug"
+                },
+                {
+                    value: xcodeProject.generateUuid(),
+                    comment: "Release"
+                }
+            ],
+            defaultConfigurationIsVisible: 0,
+            defaultConfigurationName: "Release"
+        };
+
+        // XCBuildConfiguration 객체 초기화
+        if (!xcodeProject.hash.project.objects.XCBuildConfiguration) {
+            xcodeProject.hash.project.objects.XCBuildConfiguration = {};
+        }
+
+        // Debug Build Configuration 생성
+        var debugConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
+        xcodeProject.hash.project.objects.XCBuildConfiguration[debugConfigId] = {
+            isa: "XCBuildConfiguration",
+            buildSettings: {
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
+                "CODE_SIGN_STYLE": "Automatic",
+                "CURRENT_PROJECT_VERSION": "1",
+                "DEVELOPMENT_TEAM": "",
+                "GENERATE_INFOPLIST_FILE": "NO",
+                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
+                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
+                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
+                "MARKETING_VERSION": "1.0",
+                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
+                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
+                "SKIP_INSTALL": "YES",
+                "SWIFT_EMIT_LOC_STRINGS": "YES",
+                "SWIFT_VERSION": "5.0",
+                "TARGETED_DEVICE_FAMILY": "1,2"
+            },
+            name: "Debug"
+        };
+
+        // Release Build Configuration 생성
+        var releaseConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
+        xcodeProject.hash.project.objects.XCBuildConfiguration[releaseConfigId] = {
+            isa: "XCBuildConfiguration",
+            buildSettings: {
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
+                "CODE_SIGN_STYLE": "Automatic",
+                "CURRENT_PROJECT_VERSION": "1",
+                "DEVELOPMENT_TEAM": "",
+                "GENERATE_INFOPLIST_FILE": "NO",
+                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
+                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
+                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
+                "MARKETING_VERSION": "1.0",
+                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
+                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
+                "SKIP_INSTALL": "YES",
+                "SWIFT_EMIT_LOC_STRINGS": "YES",
+                "SWIFT_VERSION": "5.0",
+                "TARGETED_DEVICE_FAMILY": "1,2"
+            },
+            name: "Release"
+        };
+
+        // Extension을 프로젝트에 추가
+        var projectGroup = xcodeProject.findPBXGroupKey({name: appName});
+        if (projectGroup) {
+            xcodeProject.hash.project.objects.PBXGroup[projectGroup].children.push({
+                value: extensionGroupId,
+                comment: extensionName
+            });
+        }
+
+        // PBXNativeTarget 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXNativeTarget) {
+            xcodeProject.hash.project.objects.PBXNativeTarget = {};
+        }
+
+        // Extension Target 객체 생성
+        xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
+            isa: "PBXNativeTarget",
+            buildConfigurationList: extensionBuildConfigId,
+            buildPhases: [
+                {
+                    value: extensionSourcesPhaseId,
+                    comment: "Sources"
+                },
+                {
+                    value: extensionFrameworksPhaseId,
+                    comment: "Frameworks"
+                },
+                {
+                    value: extensionResourcesPhaseId,
+                    comment: "Resources"
+                }
+            ],
+            buildRules: [],
+            dependencies: [],
+            name: extensionName,
+            productName: extensionName,
+            productReference: {
+                value: extensionProductId,
+                comment: extensionName + ".appex"
+            },
+            productType: "com.apple.product-type.app-extension"
+        };
+
+        // Extension Target을 프로젝트에 추가
+        xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push({
+            value: extensionTargetId,
+            comment: extensionName
+        });
+
+        // 메인 앱에 Embed App Extension 추가
+        this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId);
+
+        utilities.log("Notification Service Extension setup completed");
+        utilities.log("Extension Target ID: " + extensionTargetId);
+        utilities.log("Extension Product ID: " + extensionProductId);
+        utilities.log("Extension Bundle ID: " + extensionBundleId);
+    },
+
+    createNotificationContentExtension: function(context, xcodeProject, appName, bundleId) {
+        var EXTENSION_TYPE = "NotificationContent";
+        var extensionName = EXTENSION_TYPE;
+        var extensionBundleId = bundleId + "." + EXTENSION_TYPE;
+
+        utilities.log("Setting up Notification Content Extension: " + extensionName);
+
+        // Extension 디렉토리 생성
+        var extensionDir = path.join("platforms", "ios", appName, extensionName);
+        if (!fs.existsSync(extensionDir)) {
+            fs.mkdirSync(extensionDir, { recursive: true });
+        }
+
+        // Info.plist 생성
+        this.createExtensionInfoPlist(extensionDir, extensionName, extensionBundleId, EXTENSION_TYPE);
+
+        // 소스 파일 복사
+        this.copyExtensionSourceFiles(context, extensionDir, extensionName);
+
+        // Extension Target 생성
+        var extensionTargetId = xcodeProject.generateUuid();
+        var extensionProductId = xcodeProject.generateUuid();
+        var extensionGroupId = xcodeProject.generateUuid();
+        var extensionBuildConfigId = xcodeProject.generateUuid();
+        var extensionSourcesPhaseId = xcodeProject.generateUuid();
+        var extensionFrameworksPhaseId = xcodeProject.generateUuid();
+        var extensionInfoPlistId = xcodeProject.generateUuid();
+        var extensionSwiftFileId = xcodeProject.generateUuid();
+        var extensionBuildFileId = xcodeProject.generateUuid();
+        var extensionSwiftBuildFileId = xcodeProject.generateUuid();
+
+        // PBXFileReference 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXFileReference) {
+            xcodeProject.hash.project.objects.PBXFileReference = {};
+        }
+
+        // PBXBuildFile 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXBuildFile) {
+            xcodeProject.hash.project.objects.PBXBuildFile = {};
+        }
+
+        // PBXSourcesBuildPhase 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXSourcesBuildPhase) {
+            xcodeProject.hash.project.objects.PBXSourcesBuildPhase = {};
+        }
+
+        // PBXFrameworksBuildPhase 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXFrameworksBuildPhase) {
+            xcodeProject.hash.project.objects.PBXFrameworksBuildPhase = {};
+        }
+
+        // PBXResourcesBuildPhase 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXResourcesBuildPhase) {
+            xcodeProject.hash.project.objects.PBXResourcesBuildPhase = {};
+        }
+
+        // XCBuildConfigurationList 객체 초기화
+        if (!xcodeProject.hash.project.objects.XCBuildConfigurationList) {
+            xcodeProject.hash.project.objects.XCBuildConfigurationList = {};
+        }
+
+        // XCBuildConfiguration 객체 초기화
+        if (!xcodeProject.hash.project.objects.XCBuildConfiguration) {
+            xcodeProject.hash.project.objects.XCBuildConfiguration = {};
+        }
+
+        // Info.plist File Reference 생성
+        xcodeProject.hash.project.objects.PBXFileReference[extensionInfoPlistId] = {
+            isa: "PBXFileReference",
+            lastKnownFileType: "text.plist.xml",
+            path: "Info.plist",
+            sourceTree: "<group>"
+        };
+
+        // Swift 파일 File Reference 생성
+        xcodeProject.hash.project.objects.PBXFileReference[extensionSwiftFileId] = {
+            isa: "PBXFileReference",
+            lastKnownFileType: "sourcecode.swift",
+            path: "NotificationViewController.swift",
+            sourceTree: "<group>"
+        };
+
+        // Sources Build Phase 생성
+        xcodeProject.hash.project.objects.PBXSourcesBuildPhase[extensionSourcesPhaseId] = {
+            isa: "PBXSourcesBuildPhase",
+            buildActionMask: 2147483647,
+            files: [
+                {
+                    value: extensionSwiftBuildFileId,
+                    comment: "NotificationViewController.swift in Sources"
+                }
+            ],
+            runOnlyForDeploymentPostprocessing: 0
+        };
+
+        // Frameworks Build Phase 생성
+        xcodeProject.hash.project.objects.PBXFrameworksBuildPhase[extensionFrameworksPhaseId] = {
+            isa: "PBXFrameworksBuildPhase",
+            buildActionMask: 2147483647,
+            files: [],
+            runOnlyForDeploymentPostprocessing: 0
+        };
+
+        // Build File 생성 (Info.plist)
+        xcodeProject.hash.project.objects.PBXBuildFile[extensionBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: {
+                value: extensionInfoPlistId,
+                comment: "Info.plist"
+            }
+        };
+
+        // Build File 생성 (Swift file)
+        xcodeProject.hash.project.objects.PBXBuildFile[extensionSwiftBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: {
+                value: extensionSwiftFileId,
+                comment: "NotificationViewController.swift"
+            }
+        };
+
+        // Extension Target 설정
+        xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
+            isa: "PBXNativeTarget",
+            buildConfigurationList: extensionBuildConfigId,
+            buildPhases: [
+                {
+                    value: extensionSourcesPhaseId,
+                    comment: "Sources"
+                },
+                {
+                    value: extensionFrameworksPhaseId,
+                    comment: "Frameworks"
+                }
+            ],
+            buildRules: [],
+            dependencies: [],
+            name: extensionName,
+            productName: extensionName,
+            productReference: {
+                value: extensionProductId,
+                comment: extensionName + ".appex"
+            },
+            productType: "com.apple.product-type.app-extension"
+        };
+
+        // Extension Product 설정
+        xcodeProject.hash.project.objects.PBXFileReference[extensionProductId] = {
+            isa: "PBXFileReference",
+            explicitFileType: "wrapper.app-extension",
+            includeInIndex: 0,
+            path: extensionName + ".appex",
+            sourceTree: "BUILT_PRODUCTS_DIR"
+        };
+
+        // Extension Group 설정
+        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
+            isa: "PBXGroup",
+            children: [
+                {
+                    value: extensionInfoPlistId,
+                    comment: "Info.plist"
+                },
+                {
+                    value: extensionSwiftFileId,
+                    comment: "NotificationViewController.swift"
+                }
+            ],
+            path: extensionName,
+            sourceTree: "<group>"
+        };
+
+        // Build Configuration List 생성
+        xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId] = {
+            isa: "XCBuildConfigurationList",
+            buildConfigurations: [
+                {
+                    value: xcodeProject.generateUuid(),
+                    comment: "Debug"
+                },
+                {
+                    value: xcodeProject.generateUuid(),
+                    comment: "Release"
+                }
+            ],
+            defaultConfigurationIsVisible: 0,
+            defaultConfigurationName: "Release"
+        };
+
+        // Debug Build Configuration 생성
+        var debugConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
+        xcodeProject.hash.project.objects.XCBuildConfiguration[debugConfigId] = {
+            isa: "XCBuildConfiguration",
+            buildSettings: {
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
+                "CODE_SIGN_STYLE": "Automatic",
+                "CURRENT_PROJECT_VERSION": "1",
+                "DEVELOPMENT_TEAM": "",
+                "GENERATE_INFOPLIST_FILE": "NO",
+                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
+                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
+                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
+                "MARKETING_VERSION": "1.0",
+                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
+                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
+                "SKIP_INSTALL": "YES",
+                "SWIFT_EMIT_LOC_STRINGS": "YES",
+                "SWIFT_VERSION": "5.0",
+                "TARGETED_DEVICE_FAMILY": "1,2"
+            },
+            name: "Debug"
+        };
+
+        // Release Build Configuration 생성
+        var releaseConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
+        xcodeProject.hash.project.objects.XCBuildConfiguration[releaseConfigId] = {
+            isa: "XCBuildConfiguration",
+            buildSettings: {
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
+                "CODE_SIGN_STYLE": "Automatic",
+                "CURRENT_PROJECT_VERSION": "1",
+                "DEVELOPMENT_TEAM": "",
+                "GENERATE_INFOPLIST_FILE": "NO",
+                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
+                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
+                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
+                "MARKETING_VERSION": "1.0",
+                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
+                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
+                "SKIP_INSTALL": "YES",
+                "SWIFT_EMIT_LOC_STRINGS": "YES",
+                "SWIFT_VERSION": "5.0",
+                "TARGETED_DEVICE_FAMILY": "1,2"
+            },
+            name: "Release"
+        };
+
+        // Extension을 프로젝트에 추가
+        var projectGroup = xcodeProject.findPBXGroupKey({name: appName});
+        if (projectGroup) {
+            xcodeProject.hash.project.objects.PBXGroup[projectGroup].children.push({
+                value: extensionGroupId,
+                comment: extensionName
+            });
+        }
+
+        // PBXNativeTarget 객체 초기화
+        if (!xcodeProject.hash.project.objects.PBXNativeTarget) {
+            xcodeProject.hash.project.objects.PBXNativeTarget = {};
+        }
+
+        // Extension Target 객체 생성
+        xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
+            isa: "PBXNativeTarget",
+            buildConfigurationList: extensionBuildConfigId,
+            buildPhases: [
+                {
+                    value: extensionSourcesPhaseId,
+                    comment: "Sources"
+                },
+                {
+                    value: extensionFrameworksPhaseId,
+                    comment: "Frameworks"
+                }
+            ],
+            buildRules: [],
+            dependencies: [],
+            name: extensionName,
+            productName: extensionName,
+            productReference: {
+                value: extensionProductId,
+                comment: extensionName + ".appex"
+            },
+            productType: "com.apple.product-type.app-extension"
+        };
+
+        // Extension Target을 프로젝트에 추가
+        xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push({
+            value: extensionTargetId,
+            comment: extensionName
+        });
+
+        // 메인 앱에 Embed App Extension 추가
+        this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId);
+
+        utilities.log("Notification Content Extension setup completed");
+        utilities.log("Extension Target ID: " + extensionTargetId);
+        utilities.log("Extension Product ID: " + extensionProductId);
+        utilities.log("Extension Bundle ID: " + extensionBundleId);
+    },
+
+    createExtensionInfoPlist: function(extensionDir, extensionName, bundleId, extensionType) {
+        var infoPlistPath = path.join(extensionDir, "Info.plist");
+        var infoPlist = {
+            CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
+            CFBundleDisplayName: extensionName,
+            CFBundleExecutable: "$(EXECUTABLE_NAME)",
+            CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)",
+            CFBundleInfoDictionaryVersion: "6.0",
+            CFBundleName: "$(PRODUCT_NAME)",
+            CFBundlePackageType: "$(PRODUCT_BUNDLE_PACKAGE_TYPE)",
+            CFBundleShortVersionString: "1.0",
+            CFBundleVersion: "1",
+            NSExtension: {
+                NSExtensionPointIdentifier: extensionType === "NotificationService" ?
+                    "com.apple.usernotifications.service" :
+                    "com.apple.usernotifications.content"
+            }
+        };
+
+        // Notification Content Extension의 경우 MainInterface 제거
+        if (extensionType === "NotificationContent") {
+            infoPlist.NSExtension.NSExtensionMainStoryboard = "MainInterface";
+        }
+
+        fs.writeFileSync(infoPlistPath, plist.build(infoPlist));
+        utilities.log("Created Info.plist for " + extensionName);
+
+        // Extension entitlements 파일 생성
+        this.createExtensionEntitlements(extensionDir, extensionName);
+    },
+
+    createExtensionEntitlements: function(extensionDir, extensionName) {
+        var entitlementsPath = path.join(extensionDir, extensionName + ".entitlements");
+        var entitlements = {
+            "com.apple.developer.usernotifications.time-sensitive": true
+        };
+
+        fs.writeFileSync(entitlementsPath, plist.build(entitlements));
+        utilities.log("Created entitlements file for " + extensionName);
+    },
+
+    copyExtensionSourceFiles: function(context, extensionDir, extensionName) {
+        var sourceFile = extensionName === "NotificationService" ?
+            "NotificationService.swift" : "NotificationViewController.swift";
+
+        // 플러그인 디렉토리에서 소스 파일 찾기
+        var sourcePath = path.join(context.opts.plugin.dir, "src", "ios", sourceFile);
+        var targetPath = path.join(extensionDir, sourceFile);
+
+        utilities.log("Looking for source file at: " + sourcePath);
+
+        try {
+            if (fs.existsSync(sourcePath)) {
+                // 파일이 이미 존재하는 경우 덮어쓰기 (업데이트)
+                fs.copyFileSync(sourcePath, targetPath);
+                utilities.log("Copied " + sourceFile + " to " + extensionDir);
+            } else {
+                utilities.warn("Source file not found: " + sourcePath);
+                throw new Error("Required source file not found: " + sourceFile);
+            }
+        } catch (error) {
+            utilities.error("Failed to copy extension source file: " + error.message);
+            throw error;
+        }
+    },
+
+    updateExistingExtensions: function(context, xcodeProjectPath) {
+        try {
+            utilities.log("Checking for existing extensions to update...");
+
+            // 프로젝트 파일이 존재하는지 확인
+            if (!fs.existsSync(xcodeProjectPath)) {
+                utilities.log("Xcode project file not found, skipping update");
+                return;
+            }
+
+            // 프로젝트 파일 파싱 시도
+            var xcodeProject;
+            try {
+                xcodeProject = xcode.project(xcodeProjectPath);
+                xcodeProject.parseSync();
+            } catch (parseError) {
+                utilities.error("Failed to parse Xcode project file: " + parseError.message);
+                utilities.log("Skipping extension update due to project file parsing error");
+                return;
+            }
+
+            var appName = utilities.getAppName();
+            var updatedCount = 0;
+
+            // 기존 Extension 소스 파일 업데이트
+            if (this.extensionExists(xcodeProject, "NotificationService")) {
+                var serviceDir = path.join("platforms", "ios", appName, "NotificationService");
+                if (fs.existsSync(serviceDir)) {
+                    try {
+                        this.copyExtensionSourceFiles(context, serviceDir, "NotificationService");
+                        utilities.log("Updated Notification Service Extension source files");
+                        updatedCount++;
+                    } catch (copyError) {
+                        utilities.error("Failed to copy NotificationService files: " + copyError.message);
+                    }
+                }
+            }
+
+            if (this.extensionExists(xcodeProject, "NotificationContent")) {
+                var contentDir = path.join("platforms", "ios", appName, "NotificationContent");
+                if (fs.existsSync(contentDir)) {
+                    try {
+                        this.copyExtensionSourceFiles(context, contentDir, "NotificationContent");
+                        utilities.log("Updated Notification Content Extension source files");
+                        updatedCount++;
+                    } catch (copyError) {
+                        utilities.error("Failed to copy NotificationContent files: " + copyError.message);
+                    }
+                }
+            }
+
+            if (updatedCount > 0) {
+                // 프로젝트 파일 저장 시도
+                try {
+                    var projectContent = xcodeProject.writeSync();
+                    if (projectContent) {
+                        fs.writeFileSync(path.resolve(xcodeProjectPath), projectContent);
+                        utilities.log("Updated " + updatedCount + " extension(s) successfully");
+                    } else {
+                        utilities.error("Failed to generate project content");
+                    }
+                } catch (writeError) {
+                    utilities.error("Failed to write Xcode project file: " + writeError.message);
+                    utilities.log("Extension source files were updated but project file could not be saved");
+                }
+            } else {
+                utilities.log("No extensions found to update");
+            }
+
+        } catch (error) {
+            utilities.error("Failed to update existing extensions: " + error.message);
+            // 에러가 발생해도 플러그인 설치를 계속 진행
+            utilities.log("Continuing with plugin installation despite update error");
+        }
+    },
+
+    removeExtensionFilesFromMainApp: function(xcodeProject, appName) {
+        try {
+            utilities.log("Removing extension files from main app target...");
+
+            var extensionFiles = [
+                "NotificationService.swift",
+                "NotificationViewController.swift"
+            ];
+
+            // PBXBuildFile에서 Extension 파일들 제거
+            var buildFiles = xcodeProject.hash.project.objects.PBXBuildFile;
+            var filesToRemove = [];
+
+            for (var buildFileId in buildFiles) {
+                if (buildFileId.indexOf("_comment") === -1) {
+                    var buildFile = buildFiles[buildFileId];
+                    if (buildFile.fileRef_comment) {
+                        for (var i = 0; i < extensionFiles.length; i++) {
+                            if (buildFile.fileRef_comment === extensionFiles[i]) {
+                                filesToRemove.push(buildFileId);
+                                utilities.log("Found extension file in build files: " + extensionFiles[i]);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // PBXBuildFile에서 제거
+            filesToRemove.forEach(function(buildFileId) {
+                delete buildFiles[buildFileId];
+                utilities.log("Removed build file reference: " + buildFileId);
+            });
+
+            // PBXFileReference에서 Extension 파일들 제거
+            var fileRefs = xcodeProject.hash.project.objects.PBXFileReference;
+            var refsToRemove = [];
+
+            for (var fileRefId in fileRefs) {
+                if (fileRefId.indexOf("_comment") === -1) {
+                    var fileRef = fileRefs[fileRefId];
+                    if (fileRef.path) {
+                        for (var i = 0; i < extensionFiles.length; i++) {
+                            if (fileRef.path === extensionFiles[i]) {
+                                refsToRemove.push(fileRefId);
+                                utilities.log("Found extension file in file references: " + extensionFiles[i]);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // PBXFileReference에서 제거
+            refsToRemove.forEach(function(fileRefId) {
+                delete fileRefs[fileRefId];
+                utilities.log("Removed file reference: " + fileRefId);
+            });
+
+            // 메인 앱 Target의 Build Phases에서 Extension 파일들 제거
+            var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
+            for (var targetId in targets) {
+                if (targetId.indexOf("_comment") === -1) {
+                    var target = targets[targetId];
+                    if (target.name === appName) { // 메인 앱 Target
+                        if (target.buildPhases && Array.isArray(target.buildPhases)) {
+                            target.buildPhases.forEach(function(phaseObj) {
+                                var phaseId = phaseObj.value || phaseObj;
+                                var phase = xcodeProject.hash.project.objects.PBXSourcesBuildPhase[phaseId];
+                                if (phase && phase.files && Array.isArray(phase.files)) {
+                                    var filesToRemoveFromPhase = [];
+                                    phase.files.forEach(function(fileObj) {
+                                        var fileId = fileObj.value || fileObj;
+                                        if (filesToRemove.indexOf(fileId) !== -1) {
+                                            filesToRemoveFromPhase.push(fileId);
+                                        }
+                                    });
+                                    filesToRemoveFromPhase.forEach(function(fileId) {
+                                        var index = -1;
+                                        for (var i = 0; i < phase.files.length; i++) {
+                                            var currentFileId = phase.files[i].value || phase.files[i];
+                                            if (currentFileId === fileId) {
+                                                index = i;
+                                                break;
+                                            }
+                                        }
+                                        if (index > -1) {
+                                            phase.files.splice(index, 1);
+                                            utilities.log("Removed file from build phase: " + fileId);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            utilities.log("Extension files removed from main app target successfully");
+
+        } catch (error) {
+            utilities.error("Failed to remove extension files from main app: " + error.message);
+            // 에러가 발생해도 계속 진행 (치명적이지 않음)
+        }
+    },
+
+    /**
+     * 기존 Notification Extension들을 제거합니다.
+     */
+    removeExistingExtensions: function(context, xcodeProjectPath) {
+        try {
+            var xcodeProject = xcode.project(xcodeProjectPath);
+            xcodeProject.parseSync();
+
+            var appName = utilities.getAppName();
+            var removedCount = 0;
+
+            utilities.log("Removing existing notification extensions...");
+
+            // Notification Service Extension 제거
+            if (this.extensionExists(xcodeProject, "NotificationService")) {
+                this.removeExtensionTarget(xcodeProject, "NotificationService");
+                var serviceDir = path.join("platforms", "ios", appName, "NotificationService");
+                if (fs.existsSync(serviceDir)) {
+                    fs.rmSync(serviceDir, { recursive: true, force: true });
+                    utilities.log("Removed Notification Service Extension directory");
+                }
+                removedCount++;
+            }
+
+            // Notification Content Extension 제거
+            if (this.extensionExists(xcodeProject, "NotificationContent")) {
+                this.removeExtensionTarget(xcodeProject, "NotificationContent");
+                var contentDir = path.join("platforms", "ios", appName, "NotificationContent");
+                if (fs.existsSync(contentDir)) {
+                    fs.rmSync(contentDir, { recursive: true, force: true });
+                    utilities.log("Removed Notification Content Extension directory");
+                }
+                removedCount++;
+            }
+
+            if (removedCount > 0) {
+                // 프로젝트 파일 저장
+                fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
+                utilities.log("Removed " + removedCount + " extension(s) successfully");
+            } else {
+                utilities.log("No extensions found to remove");
+            }
+
+        } catch (error) {
+            utilities.error("Failed to remove existing extensions: " + error.message);
+            throw error;
+        }
+    },
+
+    /**
+     * Extension Target을 프로젝트에서 제거합니다.
+     */
+    removeExtensionTarget: function(xcodeProject, extensionName) {
+        try {
+            utilities.log("Removing extension target: " + extensionName);
+
+            // Extension Target 찾기 및 제거
+            var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
+            var targetToRemove = null;
+
+            for (var targetId in targets) {
+                if (targetId.indexOf("_comment") === -1) {
+                    var target = targets[targetId];
+                    if (target.name === extensionName) {
+                        targetToRemove = targetId;
+                        break;
+                    }
+                }
+            }
+
+            if (targetToRemove) {
+                // Target 제거
+                delete targets[targetToRemove];
+                utilities.log("Removed extension target: " + extensionName);
+
+                // 프로젝트의 targets 배열에서도 제거
+                var project = xcodeProject.getFirstProject();
+                if (project && project.targets) {
+                    project.targets = project.targets.filter(function(target) {
+                        return target.comment !== extensionName;
+                    });
+                }
+
+                // 관련 Build Phases 제거
+                var buildPhases = xcodeProject.hash.project.objects.PBXSourcesBuildPhase;
+                for (var phaseId in buildPhases) {
+                    if (phaseId.indexOf("_comment") === -1) {
+                        var phase = buildPhases[phaseId];
+                        if (phase && phase.files && phase.files.length === 0) {
+                            delete buildPhases[phaseId];
+                        }
+                    }
+                }
+
+                utilities.log("Extension target removal completed: " + extensionName);
+            } else {
+                utilities.log("Extension target not found: " + extensionName);
+            }
+
+        } catch (error) {
+            utilities.error("Failed to remove extension target: " + error.message);
+            throw error;
+        }
+    },
+
+    addEmbedAppExtensionToMainApp: function(xcodeProject, appName, extensionTargetId, extensionProductId) {
+        try {
+            utilities.log("Adding Embed App Extension to main app target...");
+
+            // 메인 앱 Target 찾기
+            var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
+            var mainAppTargetId = null;
+
+            for (var targetId in targets) {
+                if (targetId.indexOf("_comment") === -1) {
+                    var target = targets[targetId];
+                    if (target.name === appName) {
+                        mainAppTargetId = targetId;
+                        break;
+                    }
+                }
+            }
+
+            if (!mainAppTargetId) {
+                utilities.warn("Main app target not found for embedding extension.");
+                return;
+            }
+
+            var mainAppTarget = xcodeProject.hash.project.objects.PBXNativeTarget[mainAppTargetId];
+
+            // Embed App Extensions Build Phase 찾기 또는 생성
+            var embedPhaseId = null;
+            for (var i = 0; i < mainAppTarget.buildPhases.length; i++) {
+                var phaseId = mainAppTarget.buildPhases[i].value;
+                var phase = xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[phaseId];
+                if (phase && phase.name === "Embed App Extensions") {
+                    embedPhaseId = phaseId;
+                    break;
+                }
+            }
+
+            if (!embedPhaseId) {
+                // Embed App Extensions Build Phase 생성
+                embedPhaseId = xcodeProject.generateUuid();
+                xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[embedPhaseId] = {
+                    isa: "PBXCopyFilesBuildPhase",
+                    buildActionMask: 2147483647,
+                    dstPath: "",
+                    dstSubfolderSpec: "13",
+                    files: [],
+                    name: "Embed App Extensions",
+                    runOnlyForDeploymentPostprocessing: 0
+                };
+
+                // 메인 앱 Target에 Embed Phase 추가
+                mainAppTarget.buildPhases.push({
+                    value: embedPhaseId,
+                    comment: "Embed App Extensions"
+                });
+            }
+
+            // Extension을 Embed Phase에 추가
+            var embedPhase = xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[embedPhaseId];
+            var embedFileId = xcodeProject.generateUuid();
+
+            xcodeProject.hash.project.objects.PBXBuildFile[embedFileId] = {
+                isa: "PBXBuildFile",
+                fileRef: {
+                    value: extensionProductId,
+                    comment: "Embed App Extension"
+                },
+                settings: {
+                    ATTRIBUTES: ["RemoveHeadersOnCopy"]
+                }
+            };
+
+            embedPhase.files.push({
+                value: embedFileId,
+                comment: "Embed App Extension"
+            });
+
+            utilities.log("Embed App Extension added to main app target successfully");
+
+        } catch (error) {
+            utilities.error("Failed to add Embed App Extension to main app: " + error.message);
+            throw error;
+        }
     }
 };

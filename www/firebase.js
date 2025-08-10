@@ -103,6 +103,71 @@ exports.setAutoInitEnabled = function (enabled, success, error) {
     exec(success, error, "FirebasePlugin", "setAutoInitEnabled", [!!enabled]);
 };
 
+// Rich Push Notifications with Images
+exports.sendNotificationWithImage = function (options, success, error) {
+    // options should contain:
+    // - title: notification title
+    // - body: notification body
+    // - imageUrl: URL of the image to display
+    // - imageType: 'png', 'jpg', or 'gif'
+    // - description: optional description for expanded view
+    // - actionTitle: optional action button title
+    // - deepLink: optional deep link URL
+    // - category: optional notification category
+    // - backgroundColor: optional hex color for background
+
+    if (!options || !options.title || !options.body) {
+        error("Title and body are required for notifications");
+        return;
+    }
+
+    var notificationData = {
+        notification: {
+            title: options.title,
+            body: options.body
+        },
+        data: {
+            notification_foreground: "true"
+        }
+    };
+
+    // Add image URL based on type
+    if (options.imageUrl && options.imageType) {
+        var imageKey = "notification_ios_image_" + options.imageType.toLowerCase();
+        notificationData.data[imageKey] = options.imageUrl;
+    }
+
+    // Add optional fields
+    if (options.description) {
+        notificationData.data.notification_description = options.description;
+    }
+
+    if (options.actionTitle) {
+        notificationData.data.notification_action_title = options.actionTitle;
+    }
+
+    if (options.deepLink) {
+        notificationData.data.notification_deep_link = options.deepLink;
+    }
+
+    if (options.category) {
+        notificationData.data.notification_category = options.category;
+    }
+
+    if (options.backgroundColor) {
+        notificationData.data.notification_background_color = options.backgroundColor;
+    }
+
+    // Send the notification using Firebase Cloud Messaging
+    // This would typically be done server-side, but for testing we can use local notifications
+    exec(success, error, "FirebasePlugin", "sendLocalNotificationWithImage", [notificationData]);
+};
+
+exports.setupNotificationCategories = function (categories, success, error) {
+    // Setup custom notification categories for iOS
+    exec(success, error, "FirebasePlugin", "setupNotificationCategories", [categories]);
+};
+
 // Notifications - iOS-only
 exports.onOpenSettings = function (success, error) {
   exec(success, error, "FirebasePlugin", "onOpenSettings", []);

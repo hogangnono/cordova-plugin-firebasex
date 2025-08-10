@@ -147,6 +147,10 @@
 - (void)deleteChannel:(CDVInvokedUrlCommand *)command;
 - (void)listChannels:(CDVInvokedUrlCommand *)command;
 
+// Rich Push Notifications with Images
+- (void)sendLocalNotificationWithImage:(CDVInvokedUrlCommand *)command;
+- (void)setupNotificationCategories:(CDVInvokedUrlCommand *)command;
+
 @property (nonatomic, readonly) BOOL isFCMEnabled;
 
 @property (nonatomic, copy) NSString *notificationCallbackId;
