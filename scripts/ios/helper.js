@@ -604,8 +604,10 @@ end
                 utilities.log("Notification Content Extension is disabled");
             }
 
-            // 프로젝트 파일 저장
-            fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
+            // 프로젝트 저장 전 문법 수정
+            var projectContent = xcodeProject.writeSync();
+            projectContent = this.fixProjectSyntax(projectContent);
+            fs.writeFileSync(path.resolve(xcodeProjectPath), projectContent);
             utilities.log("Notification extensions setup completed successfully");
 
         } catch (error) {
@@ -702,7 +704,7 @@ end
 
     getBundleId: function(context) {
         try {
-            var configXml = utilities.parseConfigXml();
+        var configXml = utilities.parseConfigXml();
             utilities.log("Config XML parsed: " + JSON.stringify(configXml));
 
             if (!configXml || !configXml.widget) {
@@ -784,13 +786,13 @@ end
             xcodeProject.hash.project.objects.PBXResourcesBuildPhase = {};
         }
 
-        // XCBuildConfigurationList 객체 초기화
-        if (!xcodeProject.hash.project.objects.XCBuildConfigurationList) {
-            xcodeProject.hash.project.objects.XCBuildConfigurationList = {};
+        // XCConfigurationList 객체 초기화
+        if (!xcodeProject.hash.project.objects.XCConfigurationList) {
+            xcodeProject.hash.project.objects.XCConfigurationList = {};
         }
 
-        xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId] = {
-            isa: "XCBuildConfigurationList",
+        xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId] = {
+            isa: "XCConfigurationList",
             buildConfigurations: [
                 {
                     value: xcodeProject.generateUuid(),
@@ -811,7 +813,7 @@ end
         }
 
         // Debug Build Configuration 생성
-        var debugConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
+        var debugConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[debugConfigId] = {
             isa: "XCBuildConfiguration",
             buildSettings: {
@@ -837,7 +839,7 @@ end
         };
 
         // Release Build Configuration 생성
-        var releaseConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
+        var releaseConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[releaseConfigId] = {
             isa: "XCBuildConfiguration",
             buildSettings: {
@@ -976,9 +978,9 @@ end
             xcodeProject.hash.project.objects.PBXResourcesBuildPhase = {};
         }
 
-        // XCBuildConfigurationList 객체 초기화
-        if (!xcodeProject.hash.project.objects.XCBuildConfigurationList) {
-            xcodeProject.hash.project.objects.XCBuildConfigurationList = {};
+        // XCConfigurationList 객체 초기화
+        if (!xcodeProject.hash.project.objects.XCConfigurationList) {
+            xcodeProject.hash.project.objects.XCConfigurationList = {};
         }
 
         // XCBuildConfiguration 객체 초기화
@@ -1093,8 +1095,8 @@ end
         };
 
         // Build Configuration List 생성
-        xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId] = {
-            isa: "XCBuildConfigurationList",
+        xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId] = {
+            isa: "XCConfigurationList",
             buildConfigurations: [
                 {
                     value: xcodeProject.generateUuid(),
@@ -1110,7 +1112,7 @@ end
         };
 
         // Debug Build Configuration 생성
-        var debugConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
+        var debugConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[debugConfigId] = {
             isa: "XCBuildConfiguration",
             buildSettings: {
@@ -1136,7 +1138,7 @@ end
         };
 
         // Release Build Configuration 생성
-        var releaseConfigId = xcodeProject.hash.project.objects.XCBuildConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
+        var releaseConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[releaseConfigId] = {
             isa: "XCBuildConfiguration",
             buildSettings: {
@@ -1278,82 +1280,6 @@ end
         } catch (error) {
             utilities.error("Failed to copy extension source file: " + error.message);
             throw error;
-        }
-    },
-
-    updateExistingExtensions: function(context, xcodeProjectPath) {
-        try {
-            utilities.log("Checking for existing extensions to update...");
-
-            // 프로젝트 파일이 존재하는지 확인
-            if (!fs.existsSync(xcodeProjectPath)) {
-                utilities.log("Xcode project file not found, skipping update");
-                return;
-            }
-
-            // 프로젝트 파일 파싱 시도
-            var xcodeProject;
-            try {
-                xcodeProject = xcode.project(xcodeProjectPath);
-                xcodeProject.parseSync();
-            } catch (parseError) {
-                utilities.error("Failed to parse Xcode project file: " + parseError.message);
-                utilities.log("Skipping extension update due to project file parsing error");
-                return;
-            }
-
-            var appName = utilities.getAppName();
-            var updatedCount = 0;
-
-            // 기존 Extension 소스 파일 업데이트
-            if (this.extensionExists(xcodeProject, "NotificationService")) {
-                var serviceDir = path.join("platforms", "ios", appName, "NotificationService");
-                if (fs.existsSync(serviceDir)) {
-                    try {
-                        this.copyExtensionSourceFiles(context, serviceDir, "NotificationService");
-                        utilities.log("Updated Notification Service Extension source files");
-                        updatedCount++;
-                    } catch (copyError) {
-                        utilities.error("Failed to copy NotificationService files: " + copyError.message);
-                    }
-                }
-            }
-
-            if (this.extensionExists(xcodeProject, "NotificationContent")) {
-                var contentDir = path.join("platforms", "ios", appName, "NotificationContent");
-                if (fs.existsSync(contentDir)) {
-                    try {
-                        this.copyExtensionSourceFiles(context, contentDir, "NotificationContent");
-                        utilities.log("Updated Notification Content Extension source files");
-                        updatedCount++;
-                    } catch (copyError) {
-                        utilities.error("Failed to copy NotificationContent files: " + copyError.message);
-                    }
-                }
-            }
-
-            if (updatedCount > 0) {
-                // 프로젝트 파일 저장 시도
-                try {
-                    var projectContent = xcodeProject.writeSync();
-                    if (projectContent) {
-                        fs.writeFileSync(path.resolve(xcodeProjectPath), projectContent);
-                        utilities.log("Updated " + updatedCount + " extension(s) successfully");
-                    } else {
-                        utilities.error("Failed to generate project content");
-                    }
-                } catch (writeError) {
-                    utilities.error("Failed to write Xcode project file: " + writeError.message);
-                    utilities.log("Extension source files were updated but project file could not be saved");
-                }
-            } else {
-                utilities.log("No extensions found to update");
-            }
-
-        } catch (error) {
-            utilities.error("Failed to update existing extensions: " + error.message);
-            // 에러가 발생해도 플러그인 설치를 계속 진행
-            utilities.log("Continuing with plugin installation despite update error");
         }
     },
 
@@ -1499,8 +1425,10 @@ end
             }
 
             if (removedCount > 0) {
-                // 프로젝트 파일 저장
-                fs.writeFileSync(path.resolve(xcodeProjectPath), xcodeProject.writeSync());
+                // 프로젝트 파일 저장 (문법 수정 적용)
+                var projectContent = xcodeProject.writeSync();
+                projectContent = this.fixProjectSyntax(projectContent);
+                fs.writeFileSync(path.resolve(xcodeProjectPath), projectContent);
                 utilities.log("Removed " + removedCount + " extension(s) successfully");
             } else {
                 utilities.log("No extensions found to remove");
@@ -1650,5 +1578,70 @@ end
             utilities.error("Failed to add Embed App Extension to main app: " + error.message);
             throw error;
         }
+    },
+
+            /**
+     * 프로젝트 파일의 문법 에러를 수정합니다.
+     */
+    fixProjectSyntax: function(projectContent) {
+        utilities.log("Fixing project file syntax...");
+
+        var originalLength = projectContent.length;
+
+        // 1. ATTRIBUTES 배열의 마지막 쉼표 제거
+        projectContent = projectContent.replace(/ATTRIBUTES = \(([^)]*),\s*\);/g, 'ATTRIBUTES = ($1);');
+
+        // 2. 비어있는 속성값들 수정
+        projectContent = projectContent.replace(/(\w+) = ;/g, '$1 = "";');
+
+        // 3. explicitFileType = undefined 제거
+        projectContent = projectContent.replace(/\s*explicitFileType = undefined;/g, '');
+
+        // 4. 배열의 마지막 쉼표 제거 (일반적인 패턴)
+        projectContent = projectContent.replace(/,(\s*\);)/g, '$1');
+
+        // 5. 최상위 속성들의 쉼표를 세미콜론으로 복원 (fixProjectSyntax가 잘못 변경한 것 수정)
+        projectContent = projectContent.replace(/archiveVersion = 1,/g, 'archiveVersion = 1;');
+        projectContent = projectContent.replace(/objectVersion = (\d+),/g, 'objectVersion = $1;');
+
+        // 6. 연속된 세미콜론 및 잘못된 닫기 제거
+        projectContent = projectContent.replace(/;+/g, ';');
+        projectContent = projectContent.replace(/};\s*;/g, '};');
+
+        // 7. 배열 내부의 잘못된 세미콜론 제거
+        projectContent = projectContent.replace(/;\s*,/g, ',');
+
+        // 8. 배열 닫기 전 잘못된 구문 수정
+        projectContent = projectContent.replace(/(\w+ \/\* [^*]+ \*\/)\);/g, '$1\n                );');
+
+        // 9. 안전한 배열 마지막 쉼표 제거
+        projectContent = projectContent.replace(/,(\s*\);)/g, '$1');
+
+        // 10. Embed App Extension 특정 패턴 수정 (안전한 버전)
+        projectContent = projectContent.replace(/(\w+ \/\* Embed App Extension \*\/),(\s*\n\s*\w+ \/\* Embed App Extension \*\/)/g, '$1$2');
+
+        // 11. TARGETED_DEVICE_FAMILY 쉼표 문제 해결
+        projectContent = projectContent.replace(/TARGETED_DEVICE_FAMILY = (\d+,\d+);/g, 'TARGETED_DEVICE_FAMILY = "$1";');
+
+        // 12. 배열 항목 간 쉼표 누락 수정 (Embed App Extension) - 강화된 버전
+        projectContent = projectContent.replace(
+            /(\w+ \/\* Embed App Extension \*\/)\s*\n\s*(\w+ \/\* Embed App Extension \*\/)/g,
+            '$1,\n                                $2'
+        );
+
+        // 12-2. 모든 배열 내부 쉼표 누락 수정 (더 포괄적)
+        projectContent = projectContent.replace(
+            /(\w+ \/\* [^*]+ \*\/)\s*\n\s+(\w+ \/\* [^*]+ \*\/)/g,
+            '$1,\n                                $2'
+        );
+
+        // 13. (제거됨: 이제 소스에서 직접 올바른 클래스명 사용)
+
+        var fixedLength = projectContent.length;
+        if (originalLength !== fixedLength) {
+            utilities.log("Project file syntax fixed: " + (originalLength - fixedLength) + " characters changed");
+        }
+
+        return projectContent;
     }
 };

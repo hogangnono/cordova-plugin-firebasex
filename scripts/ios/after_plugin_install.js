@@ -61,11 +61,7 @@ module.exports = function(context) {
         helper.setupNotificationExtensions(context, xcodeProjectPath);
     }
 
-    // Update existing extensions if they exist and are enabled
-    if (shouldSetupService || shouldSetupContent) {
-        console.log("cordova-plugin-firebasex: Updating existing extensions...");
-        helper.updateExistingExtensions(context, xcodeProjectPath);
-    }
+    // Note: updateExistingExtensions는 불필요함 - 플러그인 설치 시 항상 새로 생성되기 때문
 
     console.log("cordova-plugin-firebasex: after_plugin_install hook completed");
 };
