@@ -534,6 +534,30 @@ end
 
         return podFileModified;
     },
+    /**
+     * XCode 프로젝트의 필요한 객체들을 초기화합니다.
+     */
+    initializeXcodeObjects: function(xcodeProject) {
+        var objectTypes = [
+            'PBXFileReference',
+            'PBXBuildFile',
+            'PBXSourcesBuildPhase',
+            'PBXFrameworksBuildPhase',
+            'PBXResourcesBuildPhase',
+            'PBXCopyFilesBuildPhase',
+            'XCConfigurationList',
+            'XCBuildConfiguration',
+            'PBXNativeTarget',
+            'PBXGroup'
+        ];
+
+        objectTypes.forEach(function(type) {
+            if (!xcodeProject.hash.project.objects[type]) {
+                xcodeProject.hash.project.objects[type] = {};
+            }
+        });
+    },
+
     ensureEncodedAppIdInUrlSchemes: function (iosPlatform){
         var googlePlistPath = path.resolve(iosPlatform.dest);
         if(!fs.existsSync(googlePlistPath)){
@@ -748,7 +772,7 @@ end
         // 소스 파일 복사
         this.copyExtensionSourceFiles(context, extensionDir, extensionName);
 
-        // Extension Target 생성
+        // 모든 필요한 ID들 미리 생성
         var extensionTargetId = xcodeProject.generateUuid();
         var extensionProductId = xcodeProject.generateUuid();
         var extensionGroupId = xcodeProject.generateUuid();
@@ -758,163 +782,156 @@ end
         var extensionResourcesPhaseId = xcodeProject.generateUuid();
         var extensionInfoPlistId = xcodeProject.generateUuid();
         var extensionSwiftFileId = xcodeProject.generateUuid();
-        var extensionBuildFileId = xcodeProject.generateUuid();
+        var extensionInfoPlistBuildFileId = xcodeProject.generateUuid();
         var extensionSwiftBuildFileId = xcodeProject.generateUuid();
 
-        // PBXFileReference 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXFileReference) {
-            xcodeProject.hash.project.objects.PBXFileReference = {};
-        }
+        // 필요한 객체들 초기화
+        this.initializeXcodeObjects(xcodeProject);
 
-        // PBXBuildFile 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXBuildFile) {
-            xcodeProject.hash.project.objects.PBXBuildFile = {};
-        }
+        // 1. File References 생성
+        xcodeProject.hash.project.objects.PBXFileReference[extensionProductId] = {
+            isa: "PBXFileReference",
+            explicitFileType: "wrapper.app-extension",
+            includeInIndex: 0,
+            path: extensionName + ".appex",
+            sourceTree: "\"BUILT_PRODUCTS_DIR\""
+        };
 
-        // PBXSourcesBuildPhase 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXSourcesBuildPhase) {
-            xcodeProject.hash.project.objects.PBXSourcesBuildPhase = {};
-        }
+        xcodeProject.hash.project.objects.PBXFileReference[extensionInfoPlistId] = {
+            isa: "PBXFileReference",
+            lastKnownFileType: "text.plist.xml",
+            path: "Info.plist",
+            sourceTree: "\"<group>\""
+        };
 
-        // PBXFrameworksBuildPhase 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXFrameworksBuildPhase) {
-            xcodeProject.hash.project.objects.PBXFrameworksBuildPhase = {};
-        }
+        xcodeProject.hash.project.objects.PBXFileReference[extensionSwiftFileId] = {
+            isa: "PBXFileReference",
+            lastKnownFileType: "sourcecode.swift",
+            path: "NotificationService.swift",
+            sourceTree: "\"<group>\""
+        };
 
-        // PBXResourcesBuildPhase 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXResourcesBuildPhase) {
-            xcodeProject.hash.project.objects.PBXResourcesBuildPhase = {};
-        }
+        // 2. Build Files 생성
+        xcodeProject.hash.project.objects.PBXBuildFile[extensionInfoPlistBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: extensionInfoPlistId
+        };
 
-        // XCConfigurationList 객체 초기화
-        if (!xcodeProject.hash.project.objects.XCConfigurationList) {
-            xcodeProject.hash.project.objects.XCConfigurationList = {};
-        }
+        xcodeProject.hash.project.objects.PBXBuildFile[extensionSwiftBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: extensionSwiftFileId
+        };
+
+        // 3. Build Phases 생성
+        xcodeProject.hash.project.objects.PBXSourcesBuildPhase[extensionSourcesPhaseId] = {
+            isa: "PBXSourcesBuildPhase",
+            buildActionMask: 2147483647,
+            files: [
+                extensionSwiftBuildFileId
+            ],
+            runOnlyForDeploymentPostprocessing: 0
+        };
+
+        xcodeProject.hash.project.objects.PBXFrameworksBuildPhase[extensionFrameworksPhaseId] = {
+            isa: "PBXFrameworksBuildPhase",
+            buildActionMask: 2147483647,
+            files: [],
+            runOnlyForDeploymentPostprocessing: 0
+        };
+
+        xcodeProject.hash.project.objects.PBXResourcesBuildPhase[extensionResourcesPhaseId] = {
+            isa: "PBXResourcesBuildPhase",
+            buildActionMask: 2147483647,
+            files: [
+                extensionInfoPlistBuildFileId
+            ],
+            runOnlyForDeploymentPostprocessing: 0
+        };
+
+        // 4. Build Configurations 생성
+        var debugConfigId = xcodeProject.generateUuid();
+        var releaseConfigId = xcodeProject.generateUuid();
 
         xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId] = {
             isa: "XCConfigurationList",
             buildConfigurations: [
-                {
-                    value: xcodeProject.generateUuid(),
-                    comment: "Debug"
-                },
-                {
-                    value: xcodeProject.generateUuid(),
-                    comment: "Release"
-                }
+                debugConfigId,
+                releaseConfigId
             ],
             defaultConfigurationIsVisible: 0,
             defaultConfigurationName: "Release"
         };
 
-        // XCBuildConfiguration 객체 초기화
-        if (!xcodeProject.hash.project.objects.XCBuildConfiguration) {
-            xcodeProject.hash.project.objects.XCBuildConfiguration = {};
-        }
+        var commonBuildSettings = {
+            "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+            "CODE_SIGN_ENTITLEMENTS": "\"" + appName + "/" + extensionName + "/" + extensionName + ".entitlements\"",
+            "CODE_SIGN_STYLE": "Automatic",
+            "CURRENT_PROJECT_VERSION": "1",
+            "DEVELOPMENT_TEAM": "\"\"",
+            "GENERATE_INFOPLIST_FILE": "NO",
+            "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
+            "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
+            "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
+            "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
+            "MARKETING_VERSION": "1.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
+            "PRODUCT_NAME": "\"$(TARGET_NAME)\"",
+            "SKIP_INSTALL": "YES",
+            "SWIFT_EMIT_LOC_STRINGS": "YES",
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": "\"1,2\""
+        };
 
-        // Debug Build Configuration 생성
-        var debugConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[debugConfigId] = {
             isa: "XCBuildConfiguration",
-            buildSettings: {
-                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
-                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
-                "CODE_SIGN_STYLE": "Automatic",
-                "CURRENT_PROJECT_VERSION": "1",
-                "DEVELOPMENT_TEAM": "",
-                "GENERATE_INFOPLIST_FILE": "NO",
-                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
-                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
-                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
-                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
-                "MARKETING_VERSION": "1.0",
-                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
-                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
-                "SKIP_INSTALL": "YES",
-                "SWIFT_EMIT_LOC_STRINGS": "YES",
-                "SWIFT_VERSION": "5.0",
-                "TARGETED_DEVICE_FAMILY": "1,2"
-            },
+            buildSettings: commonBuildSettings,
             name: "Debug"
         };
 
-        // Release Build Configuration 생성
-        var releaseConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[releaseConfigId] = {
             isa: "XCBuildConfiguration",
-            buildSettings: {
-                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
-                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
-                "CODE_SIGN_STYLE": "Automatic",
-                "CURRENT_PROJECT_VERSION": "1",
-                "DEVELOPMENT_TEAM": "",
-                "GENERATE_INFOPLIST_FILE": "NO",
-                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
-                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
-                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
-                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
-                "MARKETING_VERSION": "1.0",
-                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
-                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
-                "SKIP_INSTALL": "YES",
-                "SWIFT_EMIT_LOC_STRINGS": "YES",
-                "SWIFT_VERSION": "5.0",
-                "TARGETED_DEVICE_FAMILY": "1,2"
-            },
+            buildSettings: commonBuildSettings,
             name: "Release"
         };
 
-        // Extension을 프로젝트에 추가
-        var projectGroup = xcodeProject.findPBXGroupKey({name: appName});
-        if (projectGroup) {
-            xcodeProject.hash.project.objects.PBXGroup[projectGroup].children.push({
-                value: extensionGroupId,
-                comment: extensionName
-            });
-        }
+        // 5. Extension Group 생성
+        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
+            isa: "PBXGroup",
+            children: [
+                extensionInfoPlistId,
+                extensionSwiftFileId
+            ],
+            path: extensionName,
+            sourceTree: "\"<group>\""
+        };
 
-        // PBXNativeTarget 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXNativeTarget) {
-            xcodeProject.hash.project.objects.PBXNativeTarget = {};
-        }
-
-        // Extension Target 객체 생성
+        // 6. Extension Target 생성
         xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
             isa: "PBXNativeTarget",
             buildConfigurationList: extensionBuildConfigId,
             buildPhases: [
-                {
-                    value: extensionSourcesPhaseId,
-                    comment: "Sources"
-                },
-                {
-                    value: extensionFrameworksPhaseId,
-                    comment: "Frameworks"
-                },
-                {
-                    value: extensionResourcesPhaseId,
-                    comment: "Resources"
-                }
+                extensionSourcesPhaseId,
+                extensionFrameworksPhaseId,
+                extensionResourcesPhaseId
             ],
             buildRules: [],
             dependencies: [],
             name: extensionName,
             productName: extensionName,
-            productReference: {
-                value: extensionProductId,
-                comment: extensionName + ".appex"
-            },
-            productType: "com.apple.product-type.app-extension"
+            productReference: extensionProductId,
+            productType: "\"com.apple.product-type.app-extension\""
         };
 
-        // Extension Target을 프로젝트에 추가
-        xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push({
-            value: extensionTargetId,
-            comment: extensionName
-        });
+        // 7. 프로젝트에 추가
+        var projectGroup = xcodeProject.findPBXGroupKey({name: appName});
+        if (projectGroup) {
+            xcodeProject.hash.project.objects.PBXGroup[projectGroup].children.push(extensionGroupId);
+        }
 
-        // 메인 앱에 Embed App Extension 추가
-        this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId);
+        xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push(extensionTargetId);
+
+        // 8. 메인 앱에 Embed App Extension 추가
+        this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName);
 
         utilities.log("Notification Service Extension setup completed");
         utilities.log("Extension Target ID: " + extensionTargetId);
@@ -941,83 +958,66 @@ end
         // 소스 파일 복사
         this.copyExtensionSourceFiles(context, extensionDir, extensionName);
 
-        // Extension Target 생성
+        // 모든 필요한 ID들 미리 생성
         var extensionTargetId = xcodeProject.generateUuid();
         var extensionProductId = xcodeProject.generateUuid();
         var extensionGroupId = xcodeProject.generateUuid();
         var extensionBuildConfigId = xcodeProject.generateUuid();
         var extensionSourcesPhaseId = xcodeProject.generateUuid();
         var extensionFrameworksPhaseId = xcodeProject.generateUuid();
+        var extensionResourcesPhaseId = xcodeProject.generateUuid();
         var extensionInfoPlistId = xcodeProject.generateUuid();
         var extensionSwiftFileId = xcodeProject.generateUuid();
-        var extensionBuildFileId = xcodeProject.generateUuid();
+        var extensionInfoPlistBuildFileId = xcodeProject.generateUuid();
         var extensionSwiftBuildFileId = xcodeProject.generateUuid();
 
-        // PBXFileReference 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXFileReference) {
-            xcodeProject.hash.project.objects.PBXFileReference = {};
-        }
+        // 필요한 객체들 초기화
+        this.initializeXcodeObjects(xcodeProject);
 
-        // PBXBuildFile 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXBuildFile) {
-            xcodeProject.hash.project.objects.PBXBuildFile = {};
-        }
+        // 1. File References 생성
+        xcodeProject.hash.project.objects.PBXFileReference[extensionProductId] = {
+            isa: "PBXFileReference",
+            explicitFileType: "wrapper.app-extension",
+            includeInIndex: 0,
+            path: extensionName + ".appex",
+            sourceTree: "\"BUILT_PRODUCTS_DIR\""
+        };
 
-        // PBXSourcesBuildPhase 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXSourcesBuildPhase) {
-            xcodeProject.hash.project.objects.PBXSourcesBuildPhase = {};
-        }
-
-        // PBXFrameworksBuildPhase 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXFrameworksBuildPhase) {
-            xcodeProject.hash.project.objects.PBXFrameworksBuildPhase = {};
-        }
-
-        // PBXResourcesBuildPhase 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXResourcesBuildPhase) {
-            xcodeProject.hash.project.objects.PBXResourcesBuildPhase = {};
-        }
-
-        // XCConfigurationList 객체 초기화
-        if (!xcodeProject.hash.project.objects.XCConfigurationList) {
-            xcodeProject.hash.project.objects.XCConfigurationList = {};
-        }
-
-        // XCBuildConfiguration 객체 초기화
-        if (!xcodeProject.hash.project.objects.XCBuildConfiguration) {
-            xcodeProject.hash.project.objects.XCBuildConfiguration = {};
-        }
-
-        // Info.plist File Reference 생성
         xcodeProject.hash.project.objects.PBXFileReference[extensionInfoPlistId] = {
             isa: "PBXFileReference",
             lastKnownFileType: "text.plist.xml",
             path: "Info.plist",
-            sourceTree: "<group>"
+            sourceTree: "\"<group>\""
         };
 
-        // Swift 파일 File Reference 생성
         xcodeProject.hash.project.objects.PBXFileReference[extensionSwiftFileId] = {
             isa: "PBXFileReference",
             lastKnownFileType: "sourcecode.swift",
             path: "NotificationViewController.swift",
-            sourceTree: "<group>"
+            sourceTree: "\"<group>\""
         };
 
-        // Sources Build Phase 생성
+        // 2. Build Files 생성
+        xcodeProject.hash.project.objects.PBXBuildFile[extensionInfoPlistBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: extensionInfoPlistId
+        };
+
+        xcodeProject.hash.project.objects.PBXBuildFile[extensionSwiftBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: extensionSwiftFileId
+        };
+
+        // 3. Build Phases 생성
         xcodeProject.hash.project.objects.PBXSourcesBuildPhase[extensionSourcesPhaseId] = {
             isa: "PBXSourcesBuildPhase",
             buildActionMask: 2147483647,
             files: [
-                {
-                    value: extensionSwiftBuildFileId,
-                    comment: "NotificationViewController.swift in Sources"
-                }
+                extensionSwiftBuildFileId
             ],
             runOnlyForDeploymentPostprocessing: 0
         };
 
-        // Frameworks Build Phase 생성
         xcodeProject.hash.project.objects.PBXFrameworksBuildPhase[extensionFrameworksPhaseId] = {
             isa: "PBXFrameworksBuildPhase",
             buildActionMask: 2147483647,
@@ -1025,191 +1025,99 @@ end
             runOnlyForDeploymentPostprocessing: 0
         };
 
-        // Build File 생성 (Info.plist)
-        xcodeProject.hash.project.objects.PBXBuildFile[extensionBuildFileId] = {
-            isa: "PBXBuildFile",
-            fileRef: {
-                value: extensionInfoPlistId,
-                comment: "Info.plist"
-            }
-        };
-
-        // Build File 생성 (Swift file)
-        xcodeProject.hash.project.objects.PBXBuildFile[extensionSwiftBuildFileId] = {
-            isa: "PBXBuildFile",
-            fileRef: {
-                value: extensionSwiftFileId,
-                comment: "NotificationViewController.swift"
-            }
-        };
-
-        // Extension Target 설정
-        xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
-            isa: "PBXNativeTarget",
-            buildConfigurationList: extensionBuildConfigId,
-            buildPhases: [
-                {
-                    value: extensionSourcesPhaseId,
-                    comment: "Sources"
-                },
-                {
-                    value: extensionFrameworksPhaseId,
-                    comment: "Frameworks"
-                }
+        xcodeProject.hash.project.objects.PBXResourcesBuildPhase[extensionResourcesPhaseId] = {
+            isa: "PBXResourcesBuildPhase",
+            buildActionMask: 2147483647,
+            files: [
+                extensionInfoPlistBuildFileId
             ],
-            buildRules: [],
-            dependencies: [],
-            name: extensionName,
-            productName: extensionName,
-            productReference: {
-                value: extensionProductId,
-                comment: extensionName + ".appex"
-            },
-            productType: "com.apple.product-type.app-extension"
+            runOnlyForDeploymentPostprocessing: 0
         };
 
-        // Extension Product 설정
-        xcodeProject.hash.project.objects.PBXFileReference[extensionProductId] = {
-            isa: "PBXFileReference",
-            explicitFileType: "wrapper.app-extension",
-            includeInIndex: 0,
-            path: extensionName + ".appex",
-            sourceTree: "BUILT_PRODUCTS_DIR"
-        };
+        // 4. Build Configurations 생성
+        var debugConfigId = xcodeProject.generateUuid();
+        var releaseConfigId = xcodeProject.generateUuid();
 
-        // Extension Group 설정
-        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
-            isa: "PBXGroup",
-            children: [
-                {
-                    value: extensionInfoPlistId,
-                    comment: "Info.plist"
-                },
-                {
-                    value: extensionSwiftFileId,
-                    comment: "NotificationViewController.swift"
-                }
-            ],
-            path: extensionName,
-            sourceTree: "<group>"
-        };
-
-        // Build Configuration List 생성
         xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId] = {
             isa: "XCConfigurationList",
             buildConfigurations: [
-                {
-                    value: xcodeProject.generateUuid(),
-                    comment: "Debug"
-                },
-                {
-                    value: xcodeProject.generateUuid(),
-                    comment: "Release"
-                }
+                debugConfigId,
+                releaseConfigId
             ],
             defaultConfigurationIsVisible: 0,
             defaultConfigurationName: "Release"
         };
 
-        // Debug Build Configuration 생성
-        var debugConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[0].value;
+        var commonBuildSettings = {
+            "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+            "CODE_SIGN_ENTITLEMENTS": "\"" + appName + "/" + extensionName + "/" + extensionName + ".entitlements\"",
+            "CODE_SIGN_STYLE": "Automatic",
+            "CURRENT_PROJECT_VERSION": "1",
+            "DEVELOPMENT_TEAM": "\"\"",
+            "GENERATE_INFOPLIST_FILE": "NO",
+            "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
+            "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
+            "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
+            "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
+            "MARKETING_VERSION": "1.0",
+            "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
+            "PRODUCT_NAME": "\"$(TARGET_NAME)\"",
+            "SKIP_INSTALL": "YES",
+            "SWIFT_EMIT_LOC_STRINGS": "YES",
+            "SWIFT_VERSION": "5.0",
+            "TARGETED_DEVICE_FAMILY": "\"1,2\""
+        };
+
         xcodeProject.hash.project.objects.XCBuildConfiguration[debugConfigId] = {
             isa: "XCBuildConfiguration",
-            buildSettings: {
-                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
-                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
-                "CODE_SIGN_STYLE": "Automatic",
-                "CURRENT_PROJECT_VERSION": "1",
-                "DEVELOPMENT_TEAM": "",
-                "GENERATE_INFOPLIST_FILE": "NO",
-                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
-                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
-                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
-                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
-                "MARKETING_VERSION": "1.0",
-                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
-                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
-                "SKIP_INSTALL": "YES",
-                "SWIFT_EMIT_LOC_STRINGS": "YES",
-                "SWIFT_VERSION": "5.0",
-                "TARGETED_DEVICE_FAMILY": "1,2"
-            },
+            buildSettings: commonBuildSettings,
             name: "Debug"
         };
 
-        // Release Build Configuration 생성
-        var releaseConfigId = xcodeProject.hash.project.objects.XCConfigurationList[extensionBuildConfigId].buildConfigurations[1].value;
         xcodeProject.hash.project.objects.XCBuildConfiguration[releaseConfigId] = {
             isa: "XCBuildConfiguration",
-            buildSettings: {
-                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
-                "CODE_SIGN_ENTITLEMENTS": appName + "/" + extensionName + "/" + extensionName + ".entitlements",
-                "CODE_SIGN_STYLE": "Automatic",
-                "CURRENT_PROJECT_VERSION": "1",
-                "DEVELOPMENT_TEAM": "",
-                "GENERATE_INFOPLIST_FILE": "NO",
-                "INFOPLIST_FILE": appName + "/" + extensionName + "/Info.plist",
-                "INFOPLIST_KEY_CFBundleDisplayName": extensionName,
-                "INFOPLIST_KEY_NSHumanReadableCopyright": "",
-                "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks",
-                "MARKETING_VERSION": "1.0",
-                "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
-                "PRODUCT_NAME": "$(TARGET_NAME:c99extidentifier)",
-                "SKIP_INSTALL": "YES",
-                "SWIFT_EMIT_LOC_STRINGS": "YES",
-                "SWIFT_VERSION": "5.0",
-                "TARGETED_DEVICE_FAMILY": "1,2"
-            },
+            buildSettings: commonBuildSettings,
             name: "Release"
         };
 
-        // Extension을 프로젝트에 추가
-        var projectGroup = xcodeProject.findPBXGroupKey({name: appName});
-        if (projectGroup) {
-            xcodeProject.hash.project.objects.PBXGroup[projectGroup].children.push({
-                value: extensionGroupId,
-                comment: extensionName
-            });
-        }
+        // 5. Extension Group 생성
+        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
+            isa: "PBXGroup",
+            children: [
+                extensionInfoPlistId,
+                extensionSwiftFileId
+            ],
+            path: extensionName,
+            sourceTree: "\"<group>\""
+        };
 
-        // PBXNativeTarget 객체 초기화
-        if (!xcodeProject.hash.project.objects.PBXNativeTarget) {
-            xcodeProject.hash.project.objects.PBXNativeTarget = {};
-        }
-
-        // Extension Target 객체 생성
+        // 6. Extension Target 생성
         xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
             isa: "PBXNativeTarget",
             buildConfigurationList: extensionBuildConfigId,
             buildPhases: [
-                {
-                    value: extensionSourcesPhaseId,
-                    comment: "Sources"
-                },
-                {
-                    value: extensionFrameworksPhaseId,
-                    comment: "Frameworks"
-                }
+                extensionSourcesPhaseId,
+                extensionFrameworksPhaseId,
+                extensionResourcesPhaseId
             ],
             buildRules: [],
             dependencies: [],
             name: extensionName,
             productName: extensionName,
-            productReference: {
-                value: extensionProductId,
-                comment: extensionName + ".appex"
-            },
-            productType: "com.apple.product-type.app-extension"
+            productReference: extensionProductId,
+            productType: "\"com.apple.product-type.app-extension\""
         };
 
-        // Extension Target을 프로젝트에 추가
-        xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push({
-            value: extensionTargetId,
-            comment: extensionName
-        });
+        // 7. 프로젝트에 추가
+        var projectGroup = xcodeProject.findPBXGroupKey({name: appName});
+        if (projectGroup) {
+            xcodeProject.hash.project.objects.PBXGroup[projectGroup].children.push(extensionGroupId);
+        }
 
-        // 메인 앱에 Embed App Extension 추가
-        this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId);
+        xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push(extensionTargetId);
+
+        // 8. 메인 앱에 Embed App Extension 추가
+        this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName);
 
         utilities.log("Notification Content Extension setup completed");
         utilities.log("Extension Target ID: " + extensionTargetId);
@@ -1496,7 +1404,7 @@ end
         }
     },
 
-    addEmbedAppExtensionToMainApp: function(xcodeProject, appName, extensionTargetId, extensionProductId) {
+    addEmbedAppExtensionToMainApp: function(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName) {
         try {
             utilities.log("Adding Embed App Extension to main app target...");
 
@@ -1504,73 +1412,171 @@ end
             var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
             var mainAppTargetId = null;
 
+            utilities.log("Looking for main app target with name: " + appName);
+            utilities.log("Available targets: " + Object.keys(targets || {}).length);
+
+            if (!targets) {
+                utilities.error("PBXNativeTarget object not found in project");
+                return;
+            }
+
             for (var targetId in targets) {
                 if (targetId.indexOf("_comment") === -1) {
                     var target = targets[targetId];
-                    if (target.name === appName) {
+                    utilities.log("Found target: " + (target.name || "undefined") + " (ID: " + targetId + ")");
+                    if (target && target.name === appName) {
                         mainAppTargetId = targetId;
+                        utilities.log("Main app target found by exact name match: " + targetId);
                         break;
                     }
                 }
             }
 
+            // 정확한 이름 매치가 안된 경우, 가장 큰 target을 찾기 (메인 앱일 가능성 높음)
             if (!mainAppTargetId) {
-                utilities.warn("Main app target not found for embedding extension.");
+                utilities.log("Exact name match failed, looking for main app target by heuristics...");
+                var potentialTargets = [];
+
+                for (var targetId in targets) {
+                    if (targetId.indexOf("_comment") === -1) {
+                        var target = targets[targetId];
+                        if (target && target.productType === "\"com.apple.product-type.application\"") {
+                            potentialTargets.push({id: targetId, target: target});
+                            utilities.log("Found app-type target: " + target.name + " (ID: " + targetId + ")");
+                        }
+                    }
+                }
+
+                if (potentialTargets.length === 1) {
+                    mainAppTargetId = potentialTargets[0].id;
+                    utilities.log("Found main app target by product type: " + potentialTargets[0].target.name);
+                } else if (potentialTargets.length > 1) {
+                    // 여러 앱 타겟이 있는 경우, 이름에 Extension이 포함되지 않은 것을 선택
+                    for (var i = 0; i < potentialTargets.length; i++) {
+                        var targetName = potentialTargets[i].target.name || "";
+                        if (targetName.indexOf("Extension") === -1 && targetName.indexOf("Service") === -1) {
+                            mainAppTargetId = potentialTargets[i].id;
+                            utilities.log("Selected main app target (non-extension): " + targetName);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!mainAppTargetId) {
+                utilities.error("Main app target not found for embedding extension. App name: " + appName);
+                utilities.log("Available target names: " + Object.keys(targets).map(function(id) {
+                    return targets[id].name || "undefined";
+                }).join(", "));
                 return;
             }
 
             var mainAppTarget = xcodeProject.hash.project.objects.PBXNativeTarget[mainAppTargetId];
 
+            if (!mainAppTarget) {
+                utilities.error("Main app target object is null or undefined");
+                return;
+            }
+
+            utilities.log("Main app target found. Has buildPhases: " + (mainAppTarget.buildPhases ? "yes" : "no"));
+
+            // buildPhases 초기화 (없는 경우)
+            if (!mainAppTarget.buildPhases) {
+                utilities.log("Initializing buildPhases array for main app target");
+                mainAppTarget.buildPhases = [];
+            }
+
             // Embed App Extensions Build Phase 찾기 또는 생성
             var embedPhaseId = null;
-            for (var i = 0; i < mainAppTarget.buildPhases.length; i++) {
-                var phaseId = mainAppTarget.buildPhases[i].value;
-                var phase = xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[phaseId];
-                if (phase && phase.name === "Embed App Extensions") {
-                    embedPhaseId = phaseId;
-                    break;
+            if (mainAppTarget.buildPhases && Array.isArray(mainAppTarget.buildPhases)) {
+                for (var i = 0; i < mainAppTarget.buildPhases.length; i++) {
+                    var phaseObj = mainAppTarget.buildPhases[i];
+                    var phaseId = phaseObj.value || phaseObj; // 객체 형태 또는 직접 ID 처리
+                    var phase = xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[phaseId];
+                    if (phase && (phase.name === "\"Embed App Extensions\"" || phase.name === "Embed App Extensions")) {
+                        embedPhaseId = phaseId;
+                        break;
+                    }
                 }
             }
 
             if (!embedPhaseId) {
                 // Embed App Extensions Build Phase 생성
                 embedPhaseId = xcodeProject.generateUuid();
+
+                // PBXCopyFilesBuildPhase 객체 초기화
+                if (!xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase) {
+                    xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase = {};
+                }
+
                 xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[embedPhaseId] = {
                     isa: "PBXCopyFilesBuildPhase",
                     buildActionMask: 2147483647,
-                    dstPath: "",
-                    dstSubfolderSpec: "13",
+                    dstPath: "\"\"",
+                    dstSubfolderSpec: 13,
                     files: [],
-                    name: "Embed App Extensions",
+                    name: "\"Embed App Extensions\"",
                     runOnlyForDeploymentPostprocessing: 0
                 };
 
                 // 메인 앱 Target에 Embed Phase 추가
-                mainAppTarget.buildPhases.push({
-                    value: embedPhaseId,
-                    comment: "Embed App Extensions"
-                });
+                if (!mainAppTarget.buildPhases) {
+                    mainAppTarget.buildPhases = [];
+                }
+                mainAppTarget.buildPhases.push(embedPhaseId);
             }
 
             // Extension을 Embed Phase에 추가
             var embedPhase = xcodeProject.hash.project.objects.PBXCopyFilesBuildPhase[embedPhaseId];
             var embedFileId = xcodeProject.generateUuid();
 
+            // PBXBuildFile 추가
             xcodeProject.hash.project.objects.PBXBuildFile[embedFileId] = {
                 isa: "PBXBuildFile",
-                fileRef: {
-                    value: extensionProductId,
-                    comment: "Embed App Extension"
-                },
+                fileRef: extensionProductId,
                 settings: {
-                    ATTRIBUTES: ["RemoveHeadersOnCopy"]
+                    ATTRIBUTES: [
+                        "RemoveHeadersOnCopy"
+                    ]
                 }
             };
 
-            embedPhase.files.push({
-                value: embedFileId,
-                comment: "Embed App Extension"
-            });
+            // Embed Phase에 파일 추가
+            if (!embedPhase.files) {
+                embedPhase.files = [];
+            }
+            embedPhase.files.push(embedFileId);
+
+            // Extension Target Dependency 추가
+            var dependencyId = xcodeProject.generateUuid();
+            var targetDependencyId = xcodeProject.generateUuid();
+
+            if (!xcodeProject.hash.project.objects.PBXTargetDependency) {
+                xcodeProject.hash.project.objects.PBXTargetDependency = {};
+            }
+
+            if (!xcodeProject.hash.project.objects.PBXContainerItemProxy) {
+                xcodeProject.hash.project.objects.PBXContainerItemProxy = {};
+            }
+
+            xcodeProject.hash.project.objects.PBXContainerItemProxy[dependencyId] = {
+                isa: "PBXContainerItemProxy",
+                containerPortal: xcodeProject.getFirstProject().uuid,
+                proxyType: 1,
+                remoteGlobalIDString: extensionTargetId,
+                remoteInfo: "\"" + extensionName + "\""
+            };
+
+            xcodeProject.hash.project.objects.PBXTargetDependency[targetDependencyId] = {
+                isa: "PBXTargetDependency",
+                target: extensionTargetId,
+                targetProxy: dependencyId
+            };
+
+            if (!mainAppTarget.dependencies) {
+                mainAppTarget.dependencies = [];
+            }
+            mainAppTarget.dependencies.push(targetDependencyId);
 
             utilities.log("Embed App Extension added to main app target successfully");
 
@@ -1588,58 +1594,109 @@ end
 
         var originalLength = projectContent.length;
 
-        // 1. ATTRIBUTES 배열의 마지막 쉼표 제거
-        projectContent = projectContent.replace(/ATTRIBUTES = \(([^)]*),\s*\);/g, 'ATTRIBUTES = ($1);');
+        // 1. 배열 내 ID 참조 수정 (가장 중요한 수정)
+        // buildPhases, files, children 등의 배열에서 ID만 나열되어야 함
+        projectContent = projectContent.replace(
+            /(buildPhases|files|children|buildConfigurations|targets)\s*=\s*\(\s*([\s\S]*?)\s*\);/g,
+            function(match, arrayName, content) {
+                // 배열 내용을 개별 항목으로 분리
+                var items = [];
+                var cleanContent = content.replace(/,\s*$/, ''); // 마지막 쉼표 제거
 
-        // 2. 비어있는 속성값들 수정
-        projectContent = projectContent.replace(/(\w+) = ;/g, '$1 = "";');
+                // UUID 패턴과 comment 패턴을 찾아서 정리
+                var lines = cleanContent.split(/,?\s*\n\s*/);
 
-        // 3. explicitFileType = undefined 제거
-        projectContent = projectContent.replace(/\s*explicitFileType = undefined;/g, '');
+                lines.forEach(function(line) {
+                    line = line.trim();
+                    if (line) {
+                        // UUID만 추출 (comment 부분 제거)
+                        var uuidMatch = line.match(/^[A-Z0-9]{24}/);
+                        if (uuidMatch) {
+                            items.push(uuidMatch[0]);
+                        }
+                    }
+                });
 
-        // 4. 배열의 마지막 쉼표 제거 (일반적인 패턴)
-        projectContent = projectContent.replace(/,(\s*\);)/g, '$1');
+                if (items.length > 0) {
+                    return arrayName + ' = (\n\t\t\t\t' + items.join(',\n\t\t\t\t') + ',\n\t\t\t);';
+                } else {
+                    return arrayName + ' = ();';
+                }
+            }
+        );
 
-        // 5. 최상위 속성들의 쉼표를 세미콜론으로 복원 (fixProjectSyntax가 잘못 변경한 것 수정)
-        projectContent = projectContent.replace(/archiveVersion = 1,/g, 'archiveVersion = 1;');
-        projectContent = projectContent.replace(/objectVersion = (\d+),/g, 'objectVersion = $1;');
+        // 2. ATTRIBUTES 배열 수정
+        projectContent = projectContent.replace(
+            /ATTRIBUTES\s*=\s*\(\s*([\s\S]*?)\s*\);/g,
+            function(match, content) {
+                var items = [];
+                var lines = content.split(/,?\s*\n\s*/);
 
-        // 6. 연속된 세미콜론 및 잘못된 닫기 제거
+                lines.forEach(function(line) {
+                    line = line.trim();
+                    if (line && line !== ',') {
+                        // 마지막 쉼표 제거
+                        line = line.replace(/,$/, '');
+                        if (line) {
+                            items.push(line);
+                        }
+                    }
+                });
+
+                if (items.length > 0) {
+                    return 'ATTRIBUTES = (\n\t\t\t\t' + items.join(',\n\t\t\t\t') + ',\n\t\t\t);';
+                } else {
+                    return 'ATTRIBUTES = ();';
+                }
+            }
+        );
+
+        // 3. 빈 값들 처리
+        projectContent = projectContent.replace(/(\w+)\s*=\s*;/g, '$1 = "";');
+
+        // 4. explicitFileType = undefined 제거
+        projectContent = projectContent.replace(/\s*explicitFileType\s*=\s*undefined;/g, '');
+
+        // 5. 연속된 쉼표나 세미콜론 정리
+        projectContent = projectContent.replace(/,+/g, ',');
         projectContent = projectContent.replace(/;+/g, ';');
-        projectContent = projectContent.replace(/};\s*;/g, '};');
 
-        // 7. 배열 내부의 잘못된 세미콜론 제거
-        projectContent = projectContent.replace(/;\s*,/g, ',');
-
-        // 8. 배열 닫기 전 잘못된 구문 수정
-        projectContent = projectContent.replace(/(\w+ \/\* [^*]+ \*\/)\);/g, '$1\n                );');
-
-        // 9. 안전한 배열 마지막 쉼표 제거
+        // 6. 마지막 쉼표 처리 (배열 끝)
         projectContent = projectContent.replace(/,(\s*\);)/g, '$1');
 
-        // 10. Embed App Extension 특정 패턴 수정 (안전한 버전)
-        projectContent = projectContent.replace(/(\w+ \/\* Embed App Extension \*\/),(\s*\n\s*\w+ \/\* Embed App Extension \*\/)/g, '$1$2');
-
-        // 11. TARGETED_DEVICE_FAMILY 쉼표 문제 해결
-        projectContent = projectContent.replace(/TARGETED_DEVICE_FAMILY = (\d+,\d+);/g, 'TARGETED_DEVICE_FAMILY = "$1";');
-
-        // 12. 배열 항목 간 쉼표 누락 수정 (Embed App Extension) - 강화된 버전
+        // 7. productType 따옴표 추가
         projectContent = projectContent.replace(
-            /(\w+ \/\* Embed App Extension \*\/)\s*\n\s*(\w+ \/\* Embed App Extension \*\/)/g,
-            '$1,\n                                $2'
+            /productType\s*=\s*com\.apple\.product-type\.app-extension;/g,
+            'productType = "com.apple.product-type.app-extension";'
         );
 
-        // 12-2. 모든 배열 내부 쉼표 누락 수정 (더 포괄적)
+        // 8. TARGETED_DEVICE_FAMILY 따옴표 추가
         projectContent = projectContent.replace(
-            /(\w+ \/\* [^*]+ \*\/)\s*\n\s+(\w+ \/\* [^*]+ \*\/)/g,
-            '$1,\n                                $2'
+            /TARGETED_DEVICE_FAMILY\s*=\s*(\d+,\d+);/g,
+            'TARGETED_DEVICE_FAMILY = "$1";'
         );
 
-        // 13. (제거됨: 이제 소스에서 직접 올바른 클래스명 사용)
+        // 9. name 속성 따옴표 추가 (Extension 이름들)
+        projectContent = projectContent.replace(
+            /name\s*=\s*(NotificationService|NotificationContent|Embed App Extensions);/g,
+            'name = "$1";'
+        );
+
+        // 10. sourceTree 따옴표 추가
+        projectContent = projectContent.replace(
+            /sourceTree\s*=\s*<group>\s*;/g,
+            'sourceTree = "<group>";'
+        );
+
+        // 11. sourceTree BUILT_PRODUCTS_DIR 따옴표 추가
+        projectContent = projectContent.replace(
+            /sourceTree\s*=\s*BUILT_PRODUCTS_DIR\s*;/g,
+            'sourceTree = "BUILT_PRODUCTS_DIR";'
+        );
 
         var fixedLength = projectContent.length;
         if (originalLength !== fixedLength) {
-            utilities.log("Project file syntax fixed: " + (originalLength - fixedLength) + " characters changed");
+            utilities.log("Project file syntax fixed: " + Math.abs(originalLength - fixedLength) + " characters changed");
         }
 
         return projectContent;
