@@ -873,12 +873,14 @@ end
             "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
             "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
             "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
+            "IPHONEOS_DEPLOYMENT_TARGET": "$(inherited)", // 메인 앱 설정 상속
             "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
             "MARKETING_VERSION": "1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
             "PRODUCT_NAME": "\"$(TARGET_NAME)\"",
             "SKIP_INSTALL": "YES",
             "SWIFT_EMIT_LOC_STRINGS": "YES",
+            "SWIFT_VERSION": "5.0",
             "TARGETED_DEVICE_FAMILY": "\"1,2\""
         };
 
@@ -932,6 +934,9 @@ end
 
         // 7.5. Extension에 Push Notifications capability 추가
         this.addPushNotificationsToExtension(xcodeProject, extensionTargetId, extensionName, appName);
+
+        // 7.6. 모든 타겟에 Swift 5.0 설정
+        this.ensureSwiftVersionForAllTargets(xcodeProject, appName);
 
         // 8. 메인 앱에 Embed App Extension 추가
         this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName);
@@ -1062,12 +1067,14 @@ end
             "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
             "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
             "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
+            "IPHONEOS_DEPLOYMENT_TARGET": "$(inherited)", // 메인 앱 설정 상속
             "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
             "MARKETING_VERSION": "1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
             "PRODUCT_NAME": "\"$(TARGET_NAME)\"",
             "SKIP_INSTALL": "YES",
             "SWIFT_EMIT_LOC_STRINGS": "YES",
+            "SWIFT_VERSION": "5.0",
             "TARGETED_DEVICE_FAMILY": "\"1,2\""
         };
 
@@ -1413,6 +1420,48 @@ end
         } catch (error) {
             utilities.error("Failed to remove extension target: " + error.message);
             throw error;
+        }
+    },
+
+    /**
+     * 모든 타겟(메인 앱 + Extension들)에 Swift 5.0을 설정합니다.
+     */
+    ensureSwiftVersionForAllTargets: function(xcodeProject, appName) {
+        try {
+            utilities.log("Setting Swift 5.0 for all targets...");
+
+            var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
+            for (var targetId in targets) {
+                if (targetId.indexOf("_comment") === -1) {
+                    var target = targets[targetId];
+                    if (target && target.name) {
+                        utilities.log("Setting Swift 5.0 for target: " + target.name);
+
+                        // 해당 타겟의 Build Configurations 찾기
+                        var configListId = target.buildConfigurationList;
+                        var configList = xcodeProject.hash.project.objects.XCConfigurationList[configListId];
+
+                        if (configList && configList.buildConfigurations) {
+                            configList.buildConfigurations.forEach(function(configRef) {
+                                var configId = configRef.value || configRef;
+                                var config = xcodeProject.hash.project.objects.XCBuildConfiguration[configId];
+
+                                if (config && config.buildSettings) {
+                                    config.buildSettings["SWIFT_VERSION"] = "5.0";
+                                    // Extension들은 메인 앱과 동일한 Deployment Target 사용
+                                    // 하드코딩하지 않고 메인 앱 설정을 상속하도록 함
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            utilities.log("Swift 5.0 set for all targets successfully");
+
+        } catch (error) {
+            utilities.error("Failed to set Swift version: " + error.message);
+            // 에러가 발생해도 계속 진행
         }
     },
 
