@@ -812,10 +812,11 @@ end
         };
 
         // 2. Build Files 생성
-        xcodeProject.hash.project.objects.PBXBuildFile[extensionInfoPlistBuildFileId] = {
-            isa: "PBXBuildFile",
-            fileRef: extensionInfoPlistId
-        };
+        // Info.plist는 Build Settings에서 참조되므로 Build File로 생성하지 않음
+        // xcodeProject.hash.project.objects.PBXBuildFile[extensionInfoPlistBuildFileId] = {
+        //     isa: "PBXBuildFile",
+        //     fileRef: extensionInfoPlistId
+        // };
 
         xcodeProject.hash.project.objects.PBXBuildFile[extensionSwiftBuildFileId] = {
             isa: "PBXBuildFile",
@@ -843,7 +844,7 @@ end
             isa: "PBXResourcesBuildPhase",
             buildActionMask: 2147483647,
             files: [
-                extensionInfoPlistBuildFileId
+                // Info.plist는 Build Settings의 INFOPLIST_FILE로 지정되므로 Resources Phase에서 제외
             ],
             runOnlyForDeploymentPostprocessing: 0
         };
@@ -878,7 +879,6 @@ end
             "PRODUCT_NAME": "\"$(TARGET_NAME)\"",
             "SKIP_INSTALL": "YES",
             "SWIFT_EMIT_LOC_STRINGS": "YES",
-            "SWIFT_VERSION": "5.0",
             "TARGETED_DEVICE_FAMILY": "\"1,2\""
         };
 
@@ -1001,10 +1001,11 @@ end
         };
 
         // 2. Build Files 생성
-        xcodeProject.hash.project.objects.PBXBuildFile[extensionInfoPlistBuildFileId] = {
-            isa: "PBXBuildFile",
-            fileRef: extensionInfoPlistId
-        };
+        // Info.plist는 Build Settings에서 참조되므로 Build File로 생성하지 않음
+        // xcodeProject.hash.project.objects.PBXBuildFile[extensionInfoPlistBuildFileId] = {
+        //     isa: "PBXBuildFile",
+        //     fileRef: extensionInfoPlistId
+        // };
 
         xcodeProject.hash.project.objects.PBXBuildFile[extensionSwiftBuildFileId] = {
             isa: "PBXBuildFile",
@@ -1032,7 +1033,7 @@ end
             isa: "PBXResourcesBuildPhase",
             buildActionMask: 2147483647,
             files: [
-                extensionInfoPlistBuildFileId
+                // Info.plist는 Build Settings의 INFOPLIST_FILE로 지정되므로 Resources Phase에서 제외
             ],
             runOnlyForDeploymentPostprocessing: 0
         };
@@ -1067,7 +1068,6 @@ end
             "PRODUCT_NAME": "\"$(TARGET_NAME)\"",
             "SKIP_INSTALL": "YES",
             "SWIFT_EMIT_LOC_STRINGS": "YES",
-            "SWIFT_VERSION": "5.0",
             "TARGETED_DEVICE_FAMILY": "\"1,2\""
         };
 
