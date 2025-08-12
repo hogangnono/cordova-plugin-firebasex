@@ -77,7 +77,23 @@ module.exports = {
         // Read and parse the XCode project (.pxbproj) from disk.
         // File format information: http://www.monobjc.net/xcode-project-file-format.html
         var xcodeProject = xcode.project(xcodeProjectPath);
-        xcodeProject.parseSync();
+
+        try {
+            xcodeProject.parseSync();
+        } catch (parseError) {
+            utilities.error("Failed to parse XCode project file: " + parseError.message);
+            utilities.log("Attempting to fix project syntax before parsing...");
+
+            // 프로젝트 파일을 읽어서 문법 수정 후 다시 시도
+            var projectContent = fs.readFileSync(xcodeProjectPath, 'utf8');
+            var fixedContent = this.fixProjectSyntax(projectContent);
+            fs.writeFileSync(xcodeProjectPath, fixedContent);
+
+            // 다시 파싱 시도
+            xcodeProject = xcode.project(xcodeProjectPath);
+            xcodeProject.parseSync();
+            utilities.log("Successfully parsed project after syntax fix");
+        }
 
         // Build the body of the script to be executed during the build phase.
         var script = '"' + '\\"${PODS_ROOT}/FirebaseCrashlytics/run\\"' + '"';
@@ -121,10 +137,25 @@ module.exports = {
 
             var nativeTarget = xcodeProject.hash.project.objects.PBXNativeTarget[nativeTargetId];
 
-            nativeTarget.buildPhases.push({
-                value: id,
-                comment: comment
-            });
+            // buildPhases 안전성 체크
+            if (!nativeTarget) {
+                utilities.warn("Skipping null native target: " + nativeTargetId);
+                continue;
+            }
+
+            if (!nativeTarget.buildPhases) {
+                utilities.log("Initializing buildPhases for target: " + (nativeTarget.name || nativeTargetId));
+                nativeTarget.buildPhases = [];
+            }
+
+            try {
+                nativeTarget.buildPhases.push({
+                    value: id,
+                    comment: comment
+                });
+            } catch (pushError) {
+                utilities.warn("Failed to add build phase to target " + (nativeTarget.name || nativeTargetId) + ": " + pushError.message);
+            }
         }
 
         // Finally, write the .pbxproj back out to disk.
@@ -140,7 +171,23 @@ module.exports = {
         // Read and parse the XCode project (.pxbproj) from disk.
         // File format information: http://www.monobjc.net/xcode-project-file-format.html
         var xcodeProject = xcode.project(xcodeProjectPath);
-        xcodeProject.parseSync();
+
+        try {
+            xcodeProject.parseSync();
+        } catch (parseError) {
+            utilities.error("Failed to parse XCode project file: " + parseError.message);
+            utilities.log("Attempting to fix project syntax before parsing...");
+
+            // 프로젝트 파일을 읽어서 문법 수정 후 다시 시도
+            var projectContent = fs.readFileSync(xcodeProjectPath, 'utf8');
+            var fixedContent = this.fixProjectSyntax(projectContent);
+            fs.writeFileSync(xcodeProjectPath, fixedContent);
+
+            // 다시 파싱 시도
+            xcodeProject = xcode.project(xcodeProjectPath);
+            xcodeProject.parseSync();
+            utilities.log("Successfully parsed project after syntax fix");
+        }
 
         // First, we want to delete the build phase block itself.
 
@@ -182,10 +229,25 @@ module.exports = {
 
             var nativeTarget = nativeTargets[nativeTargetId];
 
-            // We remove the reference to the block by filtering out the the ones that match.
-            nativeTarget.buildPhases = nativeTarget.buildPhases.filter(function (buildPhase) {
-                return buildPhase.comment !== commentTest;
-            });
+            // buildPhases 안전성 체크
+            if (!nativeTarget) {
+                utilities.warn("Skipping null native target during removal: " + nativeTargetId);
+                continue;
+            }
+
+            if (!nativeTarget.buildPhases) {
+                utilities.log("Target has no buildPhases to filter: " + (nativeTarget.name || nativeTargetId));
+                continue;
+            }
+
+            try {
+                // We remove the reference to the block by filtering out the the ones that match.
+                nativeTarget.buildPhases = nativeTarget.buildPhases.filter(function (buildPhase) {
+                        return buildPhase && buildPhase.comment !== commentTest;
+                });
+            } catch (filterError) {
+                utilities.warn("Failed to filter buildPhases for target " + (nativeTarget.name || nativeTargetId) + ": " + filterError.message);
+            }
         }
 
         // Finally, write the .pbxproj back out to disk.
@@ -261,7 +323,23 @@ module.exports = {
         // Read and parse the XCode project (.pxbproj) from disk.
         // File format information: http://www.monobjc.net/xcode-project-file-format.html
         var xcodeProject = xcode.project(xcodeProjectPath);
-        xcodeProject.parseSync();
+
+        try {
+            xcodeProject.parseSync();
+        } catch (parseError) {
+            utilities.error("Failed to parse XCode project file in ensureRunpathSearchPath: " + parseError.message);
+            utilities.log("Attempting to fix project syntax before parsing...");
+
+            // 프로젝트 파일을 읽어서 문법 수정 후 다시 시도
+            var projectContent = fs.readFileSync(xcodeProjectPath, 'utf8');
+            var fixedContent = this.fixProjectSyntax(projectContent);
+            fs.writeFileSync(xcodeProjectPath, fixedContent);
+
+            // 다시 파싱 시도
+            xcodeProject = xcode.project(xcodeProjectPath);
+            xcodeProject.parseSync();
+            utilities.log("Successfully parsed project after syntax fix in ensureRunpathSearchPath");
+        }
 
         // Add search paths build property
         addRunpathSearchBuildProperty(xcodeProject, "Debug");
@@ -873,7 +951,7 @@ end
             "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
             "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
             "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
-            "IPHONEOS_DEPLOYMENT_TARGET": "$(inherited)", // 메인 앱 설정 상속
+            "IPHONEOS_DEPLOYMENT_TARGET": "13.0", // KakaoSDK 호환성을 위해 13.0으로 설정
             "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
             "MARKETING_VERSION": "1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
@@ -896,16 +974,8 @@ end
             name: "Release"
         };
 
-        // 5. Extension Group 생성
-        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
-            isa: "PBXGroup",
-            children: [
-                extensionInfoPlistId,
-                extensionSwiftFileId
-            ],
-            path: extensionName,
-            sourceTree: "\"<group>\""
-        };
+        // GoogleService-Info.plist를 Extension에 추가
+        this.addGoogleServiceInfoToExtension(xcodeProject, extensionResourcesPhaseId, extensionGroupId, extensionInfoPlistId, extensionSwiftFileId, extensionName);
 
         // 6. Extension Target 생성
         xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
@@ -936,7 +1006,13 @@ end
         this.addPushNotificationsToExtension(xcodeProject, extensionTargetId, extensionName, appName);
 
         // 7.6. 모든 타겟에 Swift 5.0 설정
-        this.ensureSwiftVersionForAllTargets(xcodeProject, appName);
+        // Swift 버전 설정은 Extension 생성이 완료된 후에 실행
+        try {
+            this.ensureSwiftVersionForAllTargets(xcodeProject, appName);
+        } catch (error) {
+            utilities.warn("Failed to set Swift version during extension creation: " + error.message);
+            // Extension 생성은 계속 진행
+        }
 
         // 8. 메인 앱에 Embed App Extension 추가
         this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName);
@@ -1067,7 +1143,7 @@ end
             "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
             "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
             "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
-            "IPHONEOS_DEPLOYMENT_TARGET": "$(inherited)", // 메인 앱 설정 상속
+            "IPHONEOS_DEPLOYMENT_TARGET": "13.0", // KakaoSDK 호환성을 위해 13.0으로 설정
             "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
             "MARKETING_VERSION": "1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
@@ -1090,16 +1166,8 @@ end
             name: "Release"
         };
 
-        // 5. Extension Group 생성
-        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
-            isa: "PBXGroup",
-            children: [
-                extensionInfoPlistId,
-                extensionSwiftFileId
-            ],
-            path: extensionName,
-            sourceTree: "\"<group>\""
-        };
+        // GoogleService-Info.plist를 Extension에 추가
+        this.addGoogleServiceInfoToExtension(xcodeProject, extensionResourcesPhaseId, extensionGroupId, extensionInfoPlistId, extensionSwiftFileId, extensionName);
 
         // 6. Extension Target 생성
         xcodeProject.hash.project.objects.PBXNativeTarget[extensionTargetId] = {
@@ -1153,20 +1221,114 @@ end
             NSExtension: {
                 NSExtensionPointIdentifier: extensionType === "NotificationService" ?
                     "com.apple.usernotifications.service" :
-                    "com.apple.usernotifications.content"
+                    "com.apple.usernotifications.content-extension",
+                NSExtensionPrincipalClass: extensionType === "NotificationService" ?
+                    "$(PRODUCT_MODULE_NAME).NotificationService" :
+                    "$(PRODUCT_MODULE_NAME).NotificationViewController"
             }
         };
-
-        // Notification Content Extension의 경우 MainInterface 제거
-        if (extensionType === "NotificationContent") {
-            infoPlist.NSExtension.NSExtensionMainStoryboard = "MainInterface";
-        }
 
         fs.writeFileSync(infoPlistPath, plist.build(infoPlist));
         utilities.log("Created Info.plist for " + extensionName);
 
         // Extension entitlements 파일 생성
         this.createExtensionEntitlements(extensionDir, extensionName);
+    },
+
+    addGoogleServiceInfoToExtension: function(xcodeProject, extensionResourcesPhaseId, extensionGroupId, extensionInfoPlistId, extensionSwiftFileId, extensionName) {
+        // GoogleService-Info.plist를 Extension에 추가
+        var googleServiceFileId = xcodeProject.generateUuid();
+        var googleServiceBuildFileId = xcodeProject.generateUuid();
+        var appName = utilities.getAppName();
+
+        xcodeProject.hash.project.objects.PBXFileReference[googleServiceFileId] = {
+            isa: "PBXFileReference",
+            lastKnownFileType: "text.plist.xml",
+            name: "GoogleService-Info.plist",
+            path: "../Resources/GoogleService-Info.plist",
+            sourceTree: "\"<group>\""
+        };
+
+        xcodeProject.hash.project.objects.PBXBuildFile[googleServiceBuildFileId] = {
+            isa: "PBXBuildFile",
+            fileRef: googleServiceFileId
+        };
+
+        // Resources Build Phase에 GoogleService-Info.plist 추가
+        xcodeProject.hash.project.objects.PBXResourcesBuildPhase[extensionResourcesPhaseId].files.push(googleServiceBuildFileId);
+
+        // Extension Group 업데이트 (GoogleService-Info.plist 포함)
+        xcodeProject.hash.project.objects.PBXGroup[extensionGroupId] = {
+            isa: "PBXGroup",
+            children: [
+                extensionInfoPlistId,
+                extensionSwiftFileId,
+                googleServiceFileId
+            ],
+            path: extensionName,
+            sourceTree: "\"<group>\""
+        };
+
+        // 물리적으로 GoogleService-Info.plist를 Extension 폴더에 복사
+        try {
+            var sourcePath = path.join("platforms", "ios", appName, "Resources", "GoogleService-Info.plist");
+            var extensionDir = path.join("platforms", "ios", appName, extensionName);
+            var targetPath = path.join(extensionDir, "GoogleService-Info.plist");
+
+            if (fs.existsSync(sourcePath) && fs.statSync(sourcePath).size > 0) {
+                if (!fs.existsSync(extensionDir)) {
+                    fs.mkdirSync(extensionDir, { recursive: true });
+                }
+                fs.copyFileSync(sourcePath, targetPath);
+                utilities.log("Copied GoogleService-Info.plist to " + extensionName + " extension folder");
+
+                // 파일 참조를 로컬 파일로 업데이트
+                xcodeProject.hash.project.objects.PBXFileReference[googleServiceFileId].path = "GoogleService-Info.plist";
+            } else {
+                utilities.warn("Source GoogleService-Info.plist not found or empty at: " + sourcePath);
+                utilities.log("GoogleService-Info.plist will be copied during prepare phase");
+
+                // Extension 폴더만 생성하고, 파일은 prepare 단계에서 복사됨
+                if (!fs.existsSync(extensionDir)) {
+                    fs.mkdirSync(extensionDir, { recursive: true });
+                }
+
+                // 파일 참조를 로컬 파일로 업데이트 (prepare 단계에서 복사될 예정)
+                xcodeProject.hash.project.objects.PBXFileReference[googleServiceFileId].path = "GoogleService-Info.plist";
+            }
+        } catch (copyError) {
+            utilities.warn("Failed to copy GoogleService-Info.plist to extension: " + copyError.message);
+        }
+
+        utilities.log("Added GoogleService-Info.plist to " + extensionName + " extension");
+    },
+
+    copyGoogleServiceInfoToExtensions: function() {
+        var appName = utilities.getAppName();
+        var sourcePath = path.join("platforms", "ios", appName, "Resources", "GoogleService-Info.plist");
+
+        if (!fs.existsSync(sourcePath)) {
+            utilities.warn("Source GoogleService-Info.plist not found at: " + sourcePath);
+            return;
+        }
+
+        var extensionNames = ["NotificationService", "NotificationContent"];
+
+        extensionNames.forEach(function(extensionName) {
+            var extensionDir = path.join("platforms", "ios", appName, extensionName);
+            var targetPath = path.join(extensionDir, "GoogleService-Info.plist");
+
+            if (fs.existsSync(extensionDir)) {
+                try {
+                    fs.copyFileSync(sourcePath, targetPath);
+                    utilities.log("Copied GoogleService-Info.plist to " + extensionName + " extension");
+                } catch (error) {
+                    utilities.warn("Failed to copy GoogleService-Info.plist to " + extensionName + ": " + error.message);
+                }
+            } else {
+                utilities.log("Extension directory not found: " + extensionDir);
+            }
+        });
     },
 
     createExtensionEntitlements: function(extensionDir, extensionName) {
@@ -1274,7 +1436,7 @@ end
             for (var targetId in targets) {
                 if (targetId.indexOf("_comment") === -1) {
                     var target = targets[targetId];
-                    if (target.name === appName) { // 메인 앱 Target
+                    if (target && target.name === appName) { // 메인 앱 Target
                         if (target.buildPhases && Array.isArray(target.buildPhases)) {
                             target.buildPhases.forEach(function(phaseObj) {
                                 var phaseId = phaseObj.value || phaseObj;
@@ -1424,41 +1586,77 @@ end
     },
 
     /**
-     * 모든 타겟(메인 앱 + Extension들)에 Swift 5.0을 설정합니다.
+     * 모든 타겟(메인 앱 + Extension들)에 Swift 5.0과 iOS 13.0을 설정합니다.
      */
     ensureSwiftVersionForAllTargets: function(xcodeProject, appName) {
         try {
-            utilities.log("Setting Swift 5.0 for all targets...");
+            utilities.log("Setting Swift 5.0 and iOS 13.0 for all targets...");
+
+            // XCode 프로젝트 기본 구조 검증
+            if (!xcodeProject || !xcodeProject.hash || !xcodeProject.hash.project || !xcodeProject.hash.project.objects) {
+                utilities.warn("Invalid xcodeProject structure");
+                return;
+            }
 
             var targets = xcodeProject.hash.project.objects.PBXNativeTarget;
+            if (!targets) {
+                utilities.warn("No PBXNativeTarget found in project");
+                return;
+            }
+
+            // XCConfigurationList 객체 확인
+            if (!xcodeProject.hash.project.objects.XCConfigurationList) {
+                utilities.warn("No XCConfigurationList found in project");
+                return;
+            }
+
+            // XCBuildConfiguration 객체 확인
+            if (!xcodeProject.hash.project.objects.XCBuildConfiguration) {
+                utilities.warn("No XCBuildConfiguration found in project");
+                return;
+            }
+
             for (var targetId in targets) {
                 if (targetId.indexOf("_comment") === -1) {
                     var target = targets[targetId];
-                    if (target && target.name) {
-                        utilities.log("Setting Swift 5.0 for target: " + target.name);
+                    if (!target || !target.name) {
+                        utilities.log("Skipping invalid target: " + targetId);
+                        continue;
+                    }
 
-                        // 해당 타겟의 Build Configurations 찾기
-                        var configListId = target.buildConfigurationList;
-                        var configList = xcodeProject.hash.project.objects.XCConfigurationList[configListId];
+                    utilities.log("Setting Swift 5.0 and iOS 13.0 for target: " + target.name);
 
-                        if (configList && configList.buildConfigurations) {
-                            configList.buildConfigurations.forEach(function(configRef) {
-                                var configId = configRef.value || configRef;
-                                var config = xcodeProject.hash.project.objects.XCBuildConfiguration[configId];
+                    // 해당 타겟의 Build Configurations 찾기
+                    var configListId = target.buildConfigurationList;
+                    if (!configListId) {
+                        utilities.log("Target " + target.name + " has no buildConfigurationList, skipping");
+                        continue;
+                    }
 
-                                if (config && config.buildSettings) {
-                                    config.buildSettings["SWIFT_VERSION"] = "5.0";
-                                    // Extension들은 메인 앱과 동일한 Deployment Target 사용
-                                    // 하드코딩하지 않고 메인 앱 설정을 상속하도록 함
-                                }
-                            });
-                        }
+                    var configList = xcodeProject.hash.project.objects.XCConfigurationList[configListId];
+                    if (!configList) {
+                        utilities.log("ConfigurationList not found for target " + target.name + ", skipping");
+                        continue;
+                    }
+
+                    if (configList && configList.buildConfigurations && Array.isArray(configList.buildConfigurations)) {
+                        configList.buildConfigurations.forEach(function(configRef) {
+                            if (!configRef) return;
+
+                            var configId = configRef.value || configRef;
+                            var config = xcodeProject.hash.project.objects.XCBuildConfiguration[configId];
+
+                            if (config && config.buildSettings) {
+                                config.buildSettings["SWIFT_VERSION"] = "5.0";
+                                // KakaoSDK 호환성을 위해 모든 타겟을 iOS 13.0으로 설정
+                                config.buildSettings["IPHONEOS_DEPLOYMENT_TARGET"] = "13.0";
+                            }
+                        });
                     }
                 }
             }
 
-            utilities.log("Swift 5.0 set for all targets successfully");
-
+            utilities.log("Swift 5.0 and iOS 13.0 set for all targets successfully");
         } catch (error) {
             utilities.error("Failed to set Swift version: " + error.message);
             // 에러가 발생해도 계속 진행
@@ -1573,12 +1771,32 @@ end
                 return;
             }
 
-            utilities.log("Main app target found. Has buildPhases: " + (mainAppTarget.buildPhases ? "yes" : "no"));
+            // mainAppTarget.buildPhases 안전 체크
+            var hasBuildPhases = false;
+            try {
+                hasBuildPhases = !!(mainAppTarget && mainAppTarget.buildPhases);
+                utilities.log("Main app target found. Has buildPhases: " + (hasBuildPhases ? "yes" : "no"));
+            } catch (buildPhasesError) {
+                utilities.warn("Error checking buildPhases: " + buildPhasesError.message);
+                utilities.log("Main app target found but buildPhases access failed");
+            }
 
             // buildPhases 초기화 (없는 경우)
-            if (!mainAppTarget.buildPhases) {
-                utilities.log("Initializing buildPhases array for main app target");
-                mainAppTarget.buildPhases = [];
+            try {
+                if (!mainAppTarget.buildPhases) {
+                    utilities.log("Initializing buildPhases array for main app target");
+                    mainAppTarget.buildPhases = [];
+                }
+            } catch (initError) {
+                utilities.warn("Failed to initialize buildPhases: " + initError.message);
+                utilities.log("Attempting to recreate buildPhases property...");
+                try {
+                    mainAppTarget.buildPhases = [];
+                    utilities.log("Successfully recreated buildPhases property");
+                } catch (recreateError) {
+                    utilities.error("Failed to recreate buildPhases: " + recreateError.message);
+                    return;
+                }
             }
 
             // Embed App Extensions Build Phase 찾기 또는 생성
@@ -1614,11 +1832,32 @@ end
                     runOnlyForDeploymentPostprocessing: 0
                 };
 
-                // 메인 앱 Target에 Embed Phase 추가
+                // 메인 앱 Target에 Embed Phase 추가 (Crashlytics보다 앞에 위치)
                 if (!mainAppTarget.buildPhases) {
                     mainAppTarget.buildPhases = [];
                 }
-                mainAppTarget.buildPhases.push(embedPhaseId);
+
+                // Crashlytics Build Phase를 찾아서 그 앞에 Embed Phase 삽입
+                var crashlyticsPhaseIndex = -1;
+                for (var i = 0; i < mainAppTarget.buildPhases.length; i++) {
+                    var phaseObj = mainAppTarget.buildPhases[i];
+                    var phaseId = phaseObj.value || phaseObj;
+                    var phase = xcodeProject.hash.project.objects.PBXShellScriptBuildPhase[phaseId];
+                    if (phase && phase.name && phase.name.indexOf("Crashlytics") !== -1) {
+                        crashlyticsPhaseIndex = i;
+                        break;
+                    }
+                }
+
+                if (crashlyticsPhaseIndex !== -1) {
+                    // Crashlytics 앞에 Embed Phase 삽입
+                    mainAppTarget.buildPhases.splice(crashlyticsPhaseIndex, 0, embedPhaseId);
+                    utilities.log("Inserted Embed App Extensions before Crashlytics phase");
+                } else {
+                    // Crashlytics가 없으면 마지막에 추가
+                    mainAppTarget.buildPhases.push(embedPhaseId);
+                    utilities.log("Added Embed App Extensions at the end");
+                }
             }
 
             // Extension을 Embed Phase에 추가
@@ -1659,7 +1898,7 @@ end
                 containerPortal: xcodeProject.getFirstProject().uuid,
                 proxyType: 1,
                 remoteGlobalIDString: extensionTargetId,
-                remoteInfo: "\"" + extensionName + "\""
+                remoteInfo: extensionName
             };
 
             xcodeProject.hash.project.objects.PBXTargetDependency[targetDependencyId] = {

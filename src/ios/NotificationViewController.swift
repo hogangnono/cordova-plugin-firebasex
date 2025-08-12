@@ -2,6 +2,7 @@ import UIKit
 import UserNotifications
 import UserNotificationsUI
 
+@objc(NotificationViewController)
 class NotificationViewController: UIViewController, UNNotificationContentExtension {
 
     // MARK: - UI Components

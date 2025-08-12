@@ -61,7 +61,8 @@ module.exports = function(context) {
         helper.setupNotificationExtensions(context, xcodeProjectPath);
     }
 
-    // Note: updateExistingExtensions는 불필요함 - 플러그인 설치 시 항상 새로 생성되기 때문
+    // Note: GoogleService-Info.plist copying is handled by project-specific prepare hooks
+    console.log("cordova-plugin-firebasex: Extensions created. GoogleService-Info.plist will be copied during prepare phase.");
 
     console.log("cordova-plugin-firebasex: after_plugin_install hook completed");
 };
