@@ -930,6 +930,9 @@ end
 
         xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push(extensionTargetId);
 
+        // 7.5. Extension에 Push Notifications capability 추가
+        this.addPushNotificationsToExtension(xcodeProject, extensionTargetId, extensionName, appName);
+
         // 8. 메인 앱에 Embed App Extension 추가
         this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName);
 
@@ -1116,6 +1119,9 @@ end
 
         xcodeProject.hash.project.objects.PBXProject[xcodeProject.getFirstProject().uuid].targets.push(extensionTargetId);
 
+        // 7.5. Extension에 Push Notifications capability 추가
+        this.addPushNotificationsToExtension(xcodeProject, extensionTargetId, extensionName, appName);
+
         // 8. 메인 앱에 Embed App Extension 추가
         this.addEmbedAppExtensionToMainApp(xcodeProject, appName, extensionTargetId, extensionProductId, extensionName);
 
@@ -1158,12 +1164,18 @@ end
 
     createExtensionEntitlements: function(extensionDir, extensionName) {
         var entitlementsPath = path.join(extensionDir, extensionName + ".entitlements");
+
+        // Debug/Release 환경에 따라 aps-environment 설정
+        // Xcode는 Code Signing Identity에 따라 자동으로 처리함:
+        // - Apple Development: development
+        // - Apple Distribution: production
         var entitlements = {
-            "com.apple.developer.usernotifications.time-sensitive": true
+            // Push Notifications capability 추가 (Xcode가 자동으로 환경에 맞게 변경)
+            "aps-environment": "development"
         };
 
         fs.writeFileSync(entitlementsPath, plist.build(entitlements));
-        utilities.log("Created entitlements file for " + extensionName);
+        utilities.log("Created entitlements file with Push Notifications for " + extensionName);
     },
 
     copyExtensionSourceFiles: function(context, extensionDir, extensionName) {
@@ -1401,6 +1413,40 @@ end
         } catch (error) {
             utilities.error("Failed to remove extension target: " + error.message);
             throw error;
+        }
+    },
+
+    /**
+     * Extension에 Push Notifications capability를 추가합니다.
+     */
+    addPushNotificationsToExtension: function(xcodeProject, extensionTargetId, extensionName, appName) {
+        try {
+            utilities.log("Adding Push Notifications capability to " + extensionName + " extension...");
+
+            // Extension의 entitlements 파일에 Push Notifications 권한 추가
+            var entitlementsPath = path.join("platforms", "ios", appName, extensionName, extensionName + ".entitlements");
+
+            if (fs.existsSync(entitlementsPath)) {
+                var entitlements = plist.parse(fs.readFileSync(entitlementsPath, 'utf8'));
+
+                // Push Notifications entitlement 추가
+                entitlements["aps-environment"] = "development"; // 또는 "production"
+
+                fs.writeFileSync(entitlementsPath, plist.build(entitlements));
+                utilities.log("Added Push Notifications entitlement to " + extensionName);
+            } else {
+                // entitlements 파일이 없으면 생성
+                var entitlements = {
+                    "aps-environment": "development"
+                };
+
+                fs.writeFileSync(entitlementsPath, plist.build(entitlements));
+                utilities.log("Created entitlements file with Push Notifications for " + extensionName);
+            }
+
+        } catch (error) {
+            utilities.error("Failed to add Push Notifications to extension: " + error.message);
+            // 에러가 발생해도 계속 진행 (치명적이지 않음)
         }
     },
 
