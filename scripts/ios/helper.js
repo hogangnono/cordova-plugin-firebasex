@@ -677,40 +677,27 @@ end
             var appName = utilities.getAppName();
             var bundleId = this.getBundleId(context);
 
-            utilities.log("Setting up notification extensions for app: " + appName + " with bundle ID: " + bundleId);
-
             // 메인 앱에서 Extension 파일들 제거 (중복 방지)
             this.removeExtensionFilesFromMainApp(xcodeProject, appName);
 
             // Notification Service Extension 설정
             if (this.shouldSetupNotificationService(context)) {
                 if (!this.extensionExists(xcodeProject, "NotificationService")) {
-                    utilities.log("Creating Notification Service Extension...");
                     this.createNotificationServiceExtension(context, xcodeProject, appName, bundleId);
-                } else {
-                    utilities.log("Notification Service Extension already exists, skipping creation");
                 }
-            } else {
-                utilities.log("Notification Service Extension is disabled");
             }
 
             // Notification Content Extension 설정
             if (this.shouldSetupNotificationContent(context)) {
                 if (!this.extensionExists(xcodeProject, "NotificationContent")) {
-                    utilities.log("Creating Notification Content Extension...");
                     this.createNotificationContentExtension(context, xcodeProject, appName, bundleId);
-                } else {
-                    utilities.log("Notification Content Extension already exists, skipping creation");
                 }
-            } else {
-                utilities.log("Notification Content Extension is disabled");
             }
 
             // 프로젝트 저장 전 문법 수정
             var projectContent = xcodeProject.writeSync();
             projectContent = this.fixProjectSyntax(projectContent);
             fs.writeFileSync(path.resolve(xcodeProjectPath), projectContent);
-            utilities.log("Notification extensions setup completed successfully");
 
         } catch (error) {
             utilities.error("Failed to setup notification extensions: " + error.message);

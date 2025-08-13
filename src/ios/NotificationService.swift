@@ -14,10 +14,6 @@ class NotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         self.bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
 
-        // 🔍 디버깅: Extension이 호출되었는지 확인
-        NSLog("🚀 NotificationService Extension Started!")
-        NSLog("📱 UserInfo: %@", request.content.userInfo)
-
         guard let content = bestAttemptContent else {
             NSLog("❌ bestAttemptContent not a UNMutableNotificationContent")
             contentHandler(request.content)
@@ -26,18 +22,12 @@ class NotificationService: UNNotificationServiceExtension {
 
         // 사용자 정보에서 데이터 추출
         let userInfo: [AnyHashable: Any] = request.content.userInfo
-        NSLog("🔍 Processing userInfo with keys: %@", Array(userInfo.keys))
-
-        // Extension이 정상적으로 호출되었음을 로그로 확인
-        NSLog("🔧 NotificationService Extension processing notification")
 
         // 타임아웃 방지를 위한 빠른 처리 (25초 제한)
         let startTime = Date()
 
         // 이미지 첨부 처리
         processImageAttachments(userInfo: userInfo, content: content) { [weak self] in
-            let processingTime = Date().timeIntervalSince(startTime)
-            NSLog("⏱️ Processing completed in %.2f seconds", processingTime)
 
             // 커스텀 UI 설정 (확장 화면용)
             self?.setupCustomUI(userInfo: userInfo, content: content)
@@ -47,7 +37,6 @@ class NotificationService: UNNotificationServiceExtension {
                 NSLog("❌ bestAttemptContent is nil in completion")
                 return
             }
-            NSLog("✅ Calling contentHandler with processed content")
             contentHandler(copy)
         }
     }
@@ -64,10 +53,6 @@ class NotificationService: UNNotificationServiceExtension {
         var attachments: [UNNotificationAttachment] = []
         let group = DispatchGroup()
 
-        // 🔍 디버깅: FCM options 확인
-        NSLog("🔍 Looking for image URL in fcm_options...")
-        NSLog("📋 Available keys: %@", Array(userInfo.keys))
-
         // FCM notification.image → fcm_options.image 자동 변환 지원
         var imageURLString: String?
         let imageType = "public.png"
@@ -77,7 +62,6 @@ class NotificationService: UNNotificationServiceExtension {
         if let fcmOptions = userInfo["fcm_options"] as? [String: Any],
            let imageUrl = fcmOptions["image"] as? String, !imageUrl.isEmpty {
             imageURLString = imageUrl
-            NSLog("✅ Found image URL in fcm_options.image: %@", imageUrl)
         }
 
         // 이미지 다운로드 및 첨부
@@ -85,7 +69,6 @@ class NotificationService: UNNotificationServiceExtension {
             group.enter()
             downloadAndAttachImage(urlString: imageURLString, identifier: imageIdentifier, type: imageType) { attachment in
                 if let attachment = attachment {
-                    NSLog("✅ Successfully created image attachment")
                     attachments.append(attachment)
                 } else {
                     NSLog("❌ Failed to create image attachment")
@@ -98,11 +81,8 @@ class NotificationService: UNNotificationServiceExtension {
 
         // 모든 다운로드 완료 후 첨부
         group.notify(queue: .main) {
-            NSLog("📎 Final attachments count: %d", attachments.count)
             content.attachments = attachments
-            if attachments.count > 0 {
-                NSLog("✅ Successfully attached %d media files", attachments.count)
-            } else {
+            if attachments.count == 0 {
                 NSLog("⚠️ No attachments were created")
             }
             completion()
@@ -110,7 +90,6 @@ class NotificationService: UNNotificationServiceExtension {
     }
 
     private func downloadAndAttachImage(urlString: String, identifier: String, type: String, completion: @escaping (UNNotificationAttachment?) -> Void) {
-        NSLog("🌐 Starting download for: %@", urlString)
 
         guard let url = URL(string: urlString) else {
             NSLog("❌ Invalid URL: %@", urlString)
@@ -137,11 +116,8 @@ class NotificationService: UNNotificationServiceExtension {
                 return
             }
 
-            NSLog("✅ Downloaded %d bytes", data.count)
             let attachment = self.save(identifier: identifier, data: data, type: type)
-            if attachment != nil {
-                NSLog("✅ Successfully saved attachment: %@", identifier)
-            } else {
+            if attachment == nil {
                 NSLog("❌ Failed to save attachment: %@", identifier)
             }
             completion(attachment)

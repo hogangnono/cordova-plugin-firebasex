@@ -29,51 +29,35 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     // MARK: - UNNotificationContentExtension
 
         func didReceive(_ notification: UNNotification) {
-        print("📱 [NotificationViewController] didReceive called")
-        print("📱 [NotificationViewController] Notification title: \(notification.request.content.title)")
-
         notificationData = notification.request.content.userInfo
-        print("📱 [NotificationViewController] UserInfo: \(notificationData)")
 
         // 제목 설정
         titleLabel.text = notification.request.content.title
-        print("📱 [NotificationViewController] Title set: \(notification.request.content.title)")
 
         // 설명 설정
         if let description = notificationData["notification_description"] as? String {
             descriptionLabel.text = description
             descriptionLabel.isHidden = false
-            print("📱 [NotificationViewController] Description set: \(description)")
         } else {
             descriptionLabel.isHidden = true
-            print("📱 [NotificationViewController] No description found")
         }
 
         // 이미지 설정
-        print("📱 [NotificationViewController] Attachments count: \(notification.request.content.attachments.count)")
         if let attachment = notification.request.content.attachments.first {
-            print("📱 [NotificationViewController] Found attachment: \(attachment.identifier)")
             loadImage(from: attachment)
-        } else {
-            print("📱 [NotificationViewController] No attachments found")
         }
 
         // 액션 버튼 설정
         if let actionTitle = notificationData["action_title"] as? String {
             actionButton.setTitle(actionTitle, for: .normal)
             actionButton.isHidden = false
-            print("📱 [NotificationViewController] Action button set: \(actionTitle)")
         } else {
             actionButton.isHidden = true
-            print("📱 [NotificationViewController] No action button")
         }
 
         // 배경색 설정
         if let backgroundColor = notificationData["notification_background_color"] as? String {
             view.backgroundColor = UIColor(hex: backgroundColor)
-            print("📱 [NotificationViewController] Background color set: \(backgroundColor)")
-        } else {
-            print("📱 [NotificationViewController] No background color specified")
         }
     }
 
@@ -167,9 +151,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     // MARK: - Image Loading
 
         private func loadImage(from attachment: UNNotificationAttachment) {
-        print("🖼️ [NotificationViewController] loadImage called for attachment: \(attachment.identifier)")
         let url = attachment.url
-        print("🖼️ [NotificationViewController] Image URL: \(url)")
 
         // 파일이 존재하는지 확인
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -179,14 +161,10 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
         do {
             let data = try Data(contentsOf: url)
-            print("✅ [NotificationViewController] Loaded \(data.count) bytes from image file")
-
             let image = UIImage(data: data)
             if let image = image {
-                print("✅ [NotificationViewController] Image created successfully, size: \(image.size)")
                 DispatchQueue.main.async { [weak self] in
                     self?.imageView.image = image
-                    print("✅ [NotificationViewController] Image set to imageView")
                 }
             } else {
                 print("❌ [NotificationViewController] Failed to create UIImage from data")
@@ -202,12 +180,11 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         // 딥링크 처리
         if let deepLink = notificationData["deep_link"] as? String {
             // 딥링크 URL을 처리하는 로직
-            print("Deep link: \(deepLink)")
         }
 
         // 액션 버튼 탭 이벤트 처리
         if let actionData = notificationData["action_data"] as? [String: Any] {
-            print("Action data: \(actionData)")
+            // Action data 처리 로직
         }
     }
 }
