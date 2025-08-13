@@ -64,47 +64,36 @@ class NotificationService: UNNotificationServiceExtension {
         var attachments: [UNNotificationAttachment] = []
         let group = DispatchGroup()
 
-        // 🔍 디버깅: 이미지 URL 확인
-        NSLog("🔍 Looking for image URLs in userInfo...")
+        // 🔍 디버깅: FCM options 확인
+        NSLog("🔍 Looking for image URL in fcm_options...")
         NSLog("📋 Available keys: %@", Array(userInfo.keys))
 
-        // PNG 이미지 처리
-        if let imageURLString = userInfo["notification_ios_image_png"] as? String {
-            NSLog("✅ Found PNG image URL: %@", imageURLString)
+        // FCM notification.image → fcm_options.image 자동 변환 지원
+        var imageURLString: String?
+        let imageType = "public.png"
+        let imageIdentifier = "image.png"
+
+        // fcm_options.image에서 이미지 URL 추출
+        if let fcmOptions = userInfo["fcm_options"] as? [String: Any],
+           let imageUrl = fcmOptions["image"] as? String, !imageUrl.isEmpty {
+            imageURLString = imageUrl
+            NSLog("✅ Found image URL in fcm_options.image: %@", imageUrl)
+        }
+
+        // 이미지 다운로드 및 첨부
+        if let imageURLString = imageURLString {
             group.enter()
-            downloadAndAttachImage(urlString: imageURLString, identifier: "image.png", type: "public.png") { attachment in
+            downloadAndAttachImage(urlString: imageURLString, identifier: imageIdentifier, type: imageType) { attachment in
                 if let attachment = attachment {
-                    NSLog("✅ Successfully created PNG attachment")
+                    NSLog("✅ Successfully created image attachment")
                     attachments.append(attachment)
                 } else {
-                    NSLog("❌ Failed to create PNG attachment")
+                    NSLog("❌ Failed to create image attachment")
                 }
                 group.leave()
             }
         } else {
-            NSLog("❌ No PNG image URL found in userInfo")
-        }
-
-        // JPG 이미지 처리
-        if let imageURLString = userInfo["notification_ios_image_jpg"] as? String {
-            group.enter()
-            downloadAndAttachImage(urlString: imageURLString, identifier: "image.jpg", type: "public.jpeg") { attachment in
-                if let attachment = attachment {
-                    attachments.append(attachment)
-                }
-                group.leave()
-            }
-        }
-
-        // GIF 이미지 처리
-        if let imageURLString = userInfo["notification_ios_image_gif"] as? String {
-            group.enter()
-            downloadAndAttachImage(urlString: imageURLString, identifier: "image.gif", type: "com.compuserve.gif") { attachment in
-                if let attachment = attachment {
-                    attachments.append(attachment)
-                }
-                group.leave()
-            }
+            NSLog("❌ No image URL found in fcm_options")
         }
 
         // 모든 다운로드 완료 후 첨부
