@@ -269,20 +269,6 @@ FirebasePlugin.grantPermission(function(granted) {
 3. **검증**: 서버에서 이미지 URL 검증
 4. **제한**: 이미지 크기 및 형식 제한 설정
 
-## 예제 프로젝트 (개발/테스트용)
-
-Extension 기능을 테스트하기 위한 예제 프로젝트는 `test/` 디렉토리에서 확인할 수 있습니다.
-
-```bash
-# 개발/테스트용 스크립트 실행
-cd test
-./test-rich-notifications.sh
-```
-
-> ⚠️ **참고**: 이 테스트 스크립트는 개발 및 테스트 목적으로만 사용됩니다.
-> 실제 운영에서는 서버에서 FCM을 통해 푸시 알림을 전송하며,
-> 앱에서는 `onMessageReceived` 콜백을 통해 수신만 처리합니다.
-
 ## 추가 리소스
 
 - [Apple Notification Service Extension 가이드](https://developer.apple.com/documentation/usernotifications/unnotificationserviceextension)
