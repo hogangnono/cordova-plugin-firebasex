@@ -185,14 +185,11 @@
 				<pod name="FirebaseCoreExtension" spec="11.8.0"/>
 				<pod name="FirebaseAuth" spec="11.8.1"/>
 				<pod name="FirebaseAnalytics" spec="11.8.0"/>
-				<!--<pod name="FirebaseAnalyticsOnDeviceConversion" spec="11.8.0"/>-->
 				<pod name="FirebaseMessaging" spec="11.8.0"/>
 				<pod name="FirebasePerformance" spec="11.8.0"/>
 				<pod name="FirebaseRemoteConfig" spec="11.8.0"/>
 				<pod name="FirebaseInAppMessaging" spec="11.8.0-beta"/>
-				<pod name="FirebaseFirestore" spec="11.8.0"/>
 				<pod name="FirebaseCrashlytics" spec="11.8.0"/>
-				<pod name="FirebaseFunctions" spec="11.8.0"/>
 				<pod name="FirebaseInstallations" spec="11.8.0"/>
 				<pod name="GoogleSignIn" spec="7.1.0"/>
 				<pod name="GoogleTagManager" spec="8.0.0"/>
