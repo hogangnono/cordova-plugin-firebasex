@@ -159,6 +159,23 @@ module.exports = function(context){
         helper.ensureEncodedAppIdInUrlSchemes(PLATFORM.IOS)
         podFileModified = helper.applyPluginVarsToPodfile(pluginVariables, PLATFORM.IOS) || podFileModified;
 
+
+        // 프로젝트 파일 문법 검증 및 수정
+        try {
+            var projectPath = helper.getXcodeProjectPath();
+            if (fs.existsSync(projectPath)) {
+                utilities.log('Validating and fixing Xcode project file syntax...');
+                var projectContent = fs.readFileSync(projectPath, 'utf8');
+                var fixedContent = helper.fixProjectSyntax(projectContent);
+                if (fixedContent !== projectContent) {
+                    fs.writeFileSync(projectPath, fixedContent);
+                    utilities.log('Fixed Xcode project file syntax');
+                }
+            }
+        } catch (error) {
+            utilities.warn('Failed to fix project syntax: ' + error.message);
+        }
+
         if(podFileModified){
             utilities.log('Updating installed Pods');
             execSync('pod install --repo-update', {
