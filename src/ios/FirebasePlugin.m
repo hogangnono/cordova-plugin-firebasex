@@ -3098,4 +3098,115 @@ static NSMutableArray* pendingGlobalJS = nil;
     }];
 }
 
+// MARK: - Rich Push Notifications with Images
+
+- (void)sendLocalNotificationWithImage:(CDVInvokedUrlCommand *)command {
+    [self.commandDelegate runInBackground:^{
+        NSDictionary *notificationData = [command.arguments objectAtIndex:0];
+
+        if (!notificationData) {
+            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Notification data is required"];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            return;
+        }
+
+        // Create local notification
+        UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+
+        // Set title and body
+        NSDictionary *notification = [notificationData objectForKey:@"notification"];
+        if (notification) {
+            content.title = [notification objectForKey:@"title"];
+            content.body = [notification objectForKey:@"body"];
+        }
+
+        // Set user info (for Notification Service Extension)
+        NSDictionary *data = [notificationData objectForKey:@"data"];
+        if (data) {
+            content.userInfo = data;
+        }
+
+        // Set category if specified
+        if ([data objectForKey:@"notification_category"]) {
+            content.categoryIdentifier = [data objectForKey:@"notification_category"];
+        }
+
+        // Create trigger (immediate)
+        UNTimeIntervalNotificationTrigger *trigger = [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:1 repeats:NO];
+
+        // Create request
+        NSString *identifier = [NSString stringWithFormat:@"local_notification_%ld", (long)[[NSDate date] timeIntervalSince1970]];
+        UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier content:content trigger:trigger];
+
+        // Schedule notification
+        [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
+            if (error) {
+                CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error.localizedDescription];
+                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            } else {
+                CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"Notification scheduled successfully"];
+                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            }
+        }];
+    }];
+}
+
+- (void)setupNotificationCategories:(CDVInvokedUrlCommand *)command {
+    [self.commandDelegate runInBackground:^{
+        NSArray *categories = [command.arguments objectAtIndex:0];
+
+        if (!categories || ![categories isKindOfClass:[NSArray class]]) {
+            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Categories array is required"];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            return;
+        }
+
+        NSMutableArray *notificationCategories = [[NSMutableArray alloc] init];
+
+        for (NSDictionary *categoryData in categories) {
+            NSString *identifier = [categoryData objectForKey:@"identifier"];
+            NSArray *actions = [categoryData objectForKey:@"actions"];
+
+            if (!identifier || !actions) {
+                continue;
+            }
+
+            NSMutableArray *notificationActions = [[NSMutableArray alloc] init];
+
+            for (NSDictionary *actionData in actions) {
+                NSString *actionIdentifier = [actionData objectForKey:@"identifier"];
+                NSString *title = [actionData objectForKey:@"title"];
+                NSString *options = [actionData objectForKey:@"options"];
+
+                if (!actionIdentifier || !title) {
+                    continue;
+                }
+
+                UNNotificationActionOptions actionOptions = UNNotificationActionOptionNone;
+                if ([options isEqualToString:@"destructive"]) {
+                    actionOptions = UNNotificationActionOptionDestructive;
+                } else if ([options isEqualToString:@"foreground"]) {
+                    actionOptions = UNNotificationActionOptionForeground;
+                }
+
+                UNNotificationAction *action = [UNNotificationAction actionWithIdentifier:actionIdentifier
+                                                                                    title:title
+                                                                                  options:actionOptions];
+                [notificationActions addObject:action];
+            }
+
+            UNNotificationCategory *category = [UNNotificationCategory categoryWithIdentifier:identifier
+                                                                                      actions:notificationActions
+                                                                            intentIdentifiers:@[]
+                                                                                      options:UNNotificationCategoryOptionNone];
+            [notificationCategories addObject:category];
+        }
+
+        [[UNUserNotificationCenter currentNotificationCenter] setNotificationCategories:[NSSet setWithArray:notificationCategories]];
+
+        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"Notification categories setup successfully"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    }];
+}
+
 @end

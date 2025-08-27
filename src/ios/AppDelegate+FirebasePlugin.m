@@ -48,20 +48,20 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 
 - (BOOL)application:(UIApplication *)application swizzledDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [self application:application swizzledDidFinishLaunchingWithOptions:launchOptions];
-    
+
     #if DEBUG
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"/google/firebase/debug_mode"];
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"/google/measurement/debug_mode"];
     #endif
-    
+
     @try{
         instance = self;
-        
+
         bool isFirebaseInitializedWithPlist = false;
         if(![FIRApp defaultApp]) {
             // get GoogleService-Info.plist file path
             NSString *filePath = [[NSBundle mainBundle] pathForResource:@"GoogleService-Info" ofType:@"plist"];
-            
+
             // if file is successfully found, use it
             if(filePath){
                 [FirebasePlugin.firebasePlugin _logMessage:@"GoogleService-Info.plist found, setup: [FIRApp configureWithOptions]"];
@@ -70,7 +70,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 
                 // configure FIRApp with options
                 [FIRApp configureWithOptions:options];
-                
+
                 isFirebaseInitializedWithPlist = true;
             }else{
                 // no .plist found, try default App
@@ -88,17 +88,17 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
             // with push notifications (e.g. `urbanairship-cordova`).
             _prevUserNotificationCenterDelegate = [UNUserNotificationCenter currentNotificationCenter].delegate;
             [UNUserNotificationCenter currentNotificationCenter].delegate = self;
-            
+
             // Set FCM messaging delegate
             [FIRMessaging messaging].delegate = self;
         } else {
             // This property is persistent thus ensuring it stays in sync with FCM settings in newer versions of the app.
             [[FIRMessaging messaging] setAutoInitEnabled:NO];
         }
-    
+
         // Setup Firestore
         [FirebasePlugin setFirestore:[FIRFirestore firestore]];
-        
+
         authStateChangeListener = [[FIRAuth auth] addAuthStateDidChangeListener:^(FIRAuth * _Nonnull auth, FIRUser * _Nullable user) {
             @try {
                 if(!authStateChangeListenerInitialized){
@@ -110,7 +110,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                 [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
             }
         }];
-        
+
         authIdTokenChangeListener = [[FIRAuth auth] addIDTokenDidChangeListener:^(FIRAuth * _Nonnull auth, FIRUser * _Nullable user) {
             @try {
                 if(![FIRAuth auth].currentUser){
@@ -120,8 +120,8 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                 FIRUser* user = [FIRAuth auth].currentUser;
                 [user getIDTokenWithCompletion:^(NSString * _Nullable token, NSError * _Nullable error) {
                     if(error == nil){
-                        
-                        
+
+
                         if([token isEqualToString:currentIdToken]) return;;
                         currentIdToken = token;
                         [user getIDTokenResultWithCompletion:^(FIRAuthTokenResult * _Nullable tokenResult, NSError * _Nullable error) {
@@ -141,7 +141,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         }];
 
         self.applicationInBackground = @(YES);
-        
+
     }@catch (NSException *exception) {
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
@@ -199,20 +199,28 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
     fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
 
+    NSLog(@"📨 [AppDelegate] didReceiveRemoteNotification called");
+    NSLog(@"📨 [AppDelegate] Raw userInfo: %@", userInfo);
+
     if (!self.isFCMEnabled) {
+        NSLog(@"❌ [AppDelegate] FCM is not enabled");
         return;
     }
-    
+
     @try{
         [[FIRMessaging messaging] appDidReceiveMessage:userInfo];
         mutableUserInfo = [userInfo mutableCopy];
         NSDictionary* aps = [mutableUserInfo objectForKey:@"aps"];
         bool isContentAvailable = false;
+
+        NSLog(@"📨 [AppDelegate] APS data: %@", aps);
+
         if([aps objectForKey:@"alert"] != nil){
-            
+
             if([aps objectForKey:@"content-available"] != nil){
                 NSNumber* contentAvailable = (NSNumber*) [aps objectForKey:@"content-available"];
                 isContentAvailable = [contentAvailable isEqualToNumber:[NSNumber numberWithInt:1]];
+                NSLog(@"📨 [AppDelegate] Content available: %@", isContentAvailable ? @"YES" : @"NO");
             }
             [mutableUserInfo setValue:@"notification" forKey:@"messageType"];
             NSString* tap;
@@ -224,8 +232,9 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
             [mutableUserInfo setValue:@"data" forKey:@"messageType"];
         }
 
+        NSLog(@"📨 [AppDelegate] Processed userInfo: %@", mutableUserInfo);
         [FirebasePlugin.firebasePlugin _logMessage:[NSString stringWithFormat:@"didReceiveRemoteNotification: %@", mutableUserInfo]];
-        
+
         completionHandler(UIBackgroundFetchResultNewData);
         if([self.applicationInBackground isEqual:[NSNumber numberWithBool:YES]] && isContentAvailable){
             [FirebasePlugin.firebasePlugin _logError:@"didReceiveRemoteNotification: omitting foreground notification as content-available:1 so system notification will be shown"];
@@ -247,12 +256,12 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     if(!showForegroundNotification){
         return;
     }
-    
+
     NSString* title = nil;
     NSString* body = nil;
     NSString* sound = nil;
     NSNumber* badge = nil;
-    
+
     // Extract APNS notification keys
     NSDictionary* aps = [messageData objectForKey:@"aps"];
     if([aps objectForKey:@"alert"] != nil){
@@ -270,7 +279,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
             badge = [aps objectForKey:@"badge"];
         }
     }
-    
+
     // Extract data notification keys
     if([messageData objectForKey:@"notification_title"] != nil){
         title = [messageData objectForKey:@"notification_title"];
@@ -284,18 +293,18 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     if([messageData objectForKey:@"notification_ios_badge"] != nil){
         badge = [messageData objectForKey:@"notification_ios_badge"];
     }
-   
+
     if(title == nil || body == nil){
         return;
     }
-    
+
     [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
         @try{
             if (settings.alertSetting == UNNotificationSettingEnabled) {
                 UNMutableNotificationContent *objNotificationContent = [[UNMutableNotificationContent alloc] init];
                 objNotificationContent.title = [NSString localizedUserNotificationStringForKey:title arguments:nil];
                 objNotificationContent.body = [NSString localizedUserNotificationStringForKey:body arguments:nil];
-                
+
                 NSDictionary* alert = [[NSDictionary alloc] initWithObjectsAndKeys:
                                        title, @"title",
                                        body, @"body"
@@ -303,7 +312,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                 NSMutableDictionary* aps = [[NSMutableDictionary alloc] initWithObjectsAndKeys:
                                      alert, @"alert",
                                      nil];
-                
+
                 if(![sound isKindOfClass:[NSString class]] || [sound isEqualToString:@"default"]){
                     objNotificationContent.sound = [UNNotificationSound defaultSound];
                     [aps setValue:sound forKey:@"sound"];
@@ -311,24 +320,24 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                     objNotificationContent.sound = [UNNotificationSound soundNamed:sound];
                     [aps setValue:sound forKey:@"sound"];
                 }
-                
+
                 if(badge != nil){
                     [aps setValue:badge forKey:@"badge"];
                 }
-                
+
                 NSString* messageType = @"data";
                 if([mutableUserInfo objectForKey:@"messageType"] != nil){
                     messageType = [mutableUserInfo objectForKey:@"messageType"];
                 }
-                
+
                 NSDictionary* userInfo = [[NSDictionary alloc] initWithObjectsAndKeys:
                                           @"true", @"notification_foreground",
                                           messageType, @"messageType",
                                           aps, @"aps"
                                           , nil];
-                
+
                 objNotificationContent.userInfo = userInfo;
-                
+
                 UNTimeIntervalNotificationTrigger *trigger =  [UNTimeIntervalNotificationTrigger triggerWithTimeInterval:0.1f repeats:NO];
                 UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:@"local_notification" content:objNotificationContent trigger:trigger];
                 [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
@@ -369,7 +378,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
        willPresentNotification:(UNNotification *)notification
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
-    
+
     @try{
 
         if (![notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class] && ![notification.request.trigger isKindOfClass:UNTimeIntervalNotificationTrigger.class]) {
@@ -386,11 +395,11 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                 return;
             }
         }
-        
+
         [[FIRMessaging messaging] appDidReceiveMessage:notification.request.content.userInfo];
-        
+
         mutableUserInfo = [notification.request.content.userInfo mutableCopy];
-        
+
         NSString* messageType = [mutableUserInfo objectForKey:@"messageType"];
         if(![messageType isEqualToString:@"data"]){
             [mutableUserInfo setValue:@"notification" forKey:@"messageType"];
@@ -399,14 +408,14 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         // Print full message.
         [FirebasePlugin.firebasePlugin _logMessage:[NSString stringWithFormat:@"willPresentNotification: %@", mutableUserInfo]];
 
-        
+
         NSDictionary* aps = [mutableUserInfo objectForKey:@"aps"];
         bool isContentAvailable = [[aps objectForKey:@"content-available"] isEqualToNumber:[NSNumber numberWithInt:1]];
         if(isContentAvailable){
             [FirebasePlugin.firebasePlugin _logError:@"willPresentNotification: aborting as content-available:1 so system notification will be shown"];
             return;
         }
-        
+
         bool showForegroundNotification = [mutableUserInfo objectForKey:@"notification_foreground"];
         bool hasAlert = [aps objectForKey:@"alert"] != nil;
         bool hasBadge = [aps objectForKey:@"badge"] != nil;
@@ -432,11 +441,11 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         }else{
             [FirebasePlugin.firebasePlugin _logMessage:@"willPresentNotification: foreground notification not set"];
         }
-        
+
         if(![messageType isEqualToString:@"data"]){
             [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
         }
-        
+
     }@catch (NSException *exception) {
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
@@ -449,7 +458,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
           withCompletionHandler:(void (^)(void))completionHandler
 {
     @try{
-        
+
         if (![response.notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class] && ![response.notification.request.trigger isKindOfClass:UNTimeIntervalNotificationTrigger.class]) {
             if (_prevUserNotificationCenterDelegate) {
                 // bubbling event
@@ -466,33 +475,33 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         }
 
         [[FIRMessaging messaging] appDidReceiveMessage:response.notification.request.content.userInfo];
-        
+
         mutableUserInfo = [response.notification.request.content.userInfo mutableCopy];
-        
+
         NSString* tap;
         if([self.applicationInBackground isEqual:[NSNumber numberWithBool:YES]]){
             tap = @"background";
         }else{
             tap = @"foreground";
-            
+
         }
         [mutableUserInfo setValue:tap forKey:@"tap"];
         if([mutableUserInfo objectForKey:@"messageType"] == nil){
             [mutableUserInfo setValue:@"notification" forKey:@"messageType"];
         }
-        
+
         // Dynamic Actions
         if (response.actionIdentifier && ![response.actionIdentifier isEqual:UNNotificationDefaultActionIdentifier]) {
             [mutableUserInfo setValue:response.actionIdentifier forKey:@"action"];
         }
-        
+
         // Print full message.
         [FirebasePlugin.firebasePlugin _logInfo:[NSString stringWithFormat:@"didReceiveNotificationResponse: %@", mutableUserInfo]];
 
         [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
 
         completionHandler();
-        
+
     }@catch (NSException *exception) {
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
@@ -506,7 +515,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         CDVPluginResult* pluginResult;
         NSString* errorMessage = nil;
         FIROAuthCredential *credential;
-        
+
         if ([authorization.credential isKindOfClass:[ASAuthorizationAppleIDCredential class]]) {
             ASAuthorizationAppleIDCredential *appleIDCredential = authorization.credential;
             NSString *rawNonce = [FirebasePlugin appleSignInNonce];
@@ -524,7 +533,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                     credential = [FIROAuthProvider credentialWithProviderID:@"apple.com"
                         IDToken:idToken
                         rawNonce:rawNonce];
-                    
+
                     NSNumber* key = [[FirebasePlugin firebasePlugin] saveAuthCredential:credential];
                     NSMutableDictionary* result = [[NSMutableDictionary alloc] init];
                     [result setValue:@"true" forKey:@"instantVerification"];
