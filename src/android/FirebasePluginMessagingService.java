@@ -547,7 +547,7 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
     }
 
     /**
-     * Unicode escape decoding (\uXXXX)
+     * Unicode escape decoding
      */
     private String decodeUnicodeEscapes(String str) {
         if (str == null || !str.contains("\\u")) {
