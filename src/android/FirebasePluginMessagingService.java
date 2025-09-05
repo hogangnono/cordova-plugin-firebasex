@@ -295,6 +295,12 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
             // Channel
             if(channelId == null || !FirebasePlugin.channelExists(channelId)){
                 channelId = FirebasePlugin.defaultChannelId;
+                if(channelId == null) {
+                    channelId = "fcm_default_channel";
+                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !channelExists(channelId)) {
+                        createDefaultNotificationChannel(channelId);
+                    }
+                }
             }
             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
                 Log.d(TAG, "Channel ID: "+channelId);
@@ -575,5 +581,34 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
         }
 
         return result.toString();
+    }
+
+    private boolean channelExists(String channelId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                NotificationChannel channel = notificationManager.getNotificationChannel(channelId);
+                return channel != null;
+            }
+        }
+        return true; // Android O 이하에서는 채널이 필요 없음
+    }
+
+    private void createDefaultNotificationChannel(String channelId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Default",
+                    NotificationManager.IMPORTANCE_HIGH
+                );
+                channel.setDescription("Default notification channel");
+                channel.enableLights(true);
+                channel.enableVibration(true);
+                notificationManager.createNotificationChannel(channel);
+                Log.d(TAG, "Created default notification channel: " + channelId);
+            }
+        }
     }
 }
