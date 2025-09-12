@@ -38,6 +38,10 @@ import java.net.URL;
 import java.util.Map;
 import java.util.Random;
 
+import org.json.JSONObject;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+
 public class FirebasePluginMessagingService extends FirebaseMessagingService {
 
     private static final String TAG = "FirebasePlugin";
@@ -192,6 +196,25 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                 if(data.containsKey("notification_android_priority")) priority = data.get("notification_android_priority");
                 if(data.containsKey("notification_android_image")) image = data.get("notification_android_image");
                 if(data.containsKey("notification_android_image_type")) imageType = data.get("notification_android_image_type");
+                if (data.containsKey("sendbird")) {
+                    try {
+                        String sendbirdJson = data.get("sendbird");
+                        if (sendbirdJson != null) {
+                            if (title == null && sendbirdJson.contains("push_title")) {
+                                title = parseJsonString(sendbirdJson, "push_title");
+                            }
+                            if (body == null && sendbirdJson.contains("message")) {
+                                body = parseJsonString(sendbirdJson, "message");
+                            }
+
+                            if (title != null || body != null) {
+                                Log.d(TAG, "Sendbird push detected - title: " + title + ", body: " + body);
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error processing Sendbird data: " + e.getMessage());
+                    }
+                }
             }
 
             if (TextUtils.isEmpty(id)) {
@@ -272,6 +295,12 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
             // Channel
             if(channelId == null || !FirebasePlugin.channelExists(channelId)){
                 channelId = FirebasePlugin.defaultChannelId;
+                if(channelId == null) {
+                    channelId = "fcm_default_channel";
+                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !channelExists(channelId)) {
+                        createDefaultNotificationChannel(channelId);
+                    }
+                }
             }
             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
                 Log.d(TAG, "Channel ID: "+channelId);
@@ -475,6 +504,111 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
     private void putKVInBundle(String k, String v, Bundle b){
         if(v != null && !b.containsKey(k)){
             b.putString(k, v);
+        }
+    }
+
+    private String parseJsonString(String jsonString, String key) {
+        try {
+            JSONObject jsonObject = new JSONObject(jsonString);
+            if (jsonObject.has(key)) {
+                String value = jsonObject.getString(key);
+                return decodeStringValue(value);
+            }
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing Sendbird JSON for key: " + key, e);
+            return null;
+        }
+    }
+
+    /**
+     *  String value decoding (URL + Unicode escape)
+     */
+    private String decodeStringValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+
+        try {
+            String decoded = value;
+
+            if (value.contains("%")) {
+                try {
+                    decoded = URLDecoder.decode(value, "UTF-8");
+                } catch (UnsupportedEncodingException e) {
+                    Log.d(TAG, "URL decoding failed");
+                }
+            }
+
+            if (decoded.contains("\\u")) {
+                decoded = decodeUnicodeEscapes(decoded);
+                Log.d(TAG, "Unicode decoded");
+            }
+
+            return decoded;
+        } catch (Exception e) {
+            Log.e(TAG, "Error decoding string value: " + e.getMessage());
+            return value;
+        }
+    }
+
+    /**
+     * Unicode escape decoding
+     */
+    private String decodeUnicodeEscapes(String str) {
+        if (str == null || !str.contains("\\u")) {
+            return str;
+        }
+
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+
+        while (i < str.length()) {
+            if (i < str.length() - 5 && str.charAt(i) == '\\' && str.charAt(i + 1) == 'u') {
+                try {
+                    String hexCode = str.substring(i + 2, i + 6);
+                    int codePoint = Integer.parseInt(hexCode, 16);
+                    result.append((char) codePoint);
+                    i += 6;
+                } catch (NumberFormatException e) {
+                    result.append(str.charAt(i));
+                    i++;
+                }
+            } else {
+                result.append(str.charAt(i));
+                i++;
+            }
+        }
+
+        return result.toString();
+    }
+
+    private boolean channelExists(String channelId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                NotificationChannel channel = notificationManager.getNotificationChannel(channelId);
+                return channel != null;
+            }
+        }
+        return true; // Android O 이하에서는 채널이 필요 없음
+    }
+
+    private void createDefaultNotificationChannel(String channelId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Default",
+                    NotificationManager.IMPORTANCE_HIGH
+                );
+                channel.setDescription("Default notification channel");
+                channel.enableLights(true);
+                channel.enableVibration(true);
+                notificationManager.createNotificationChannel(channel);
+                Log.d(TAG, "Created default notification channel: " + channelId);
+            }
         }
     }
 }
