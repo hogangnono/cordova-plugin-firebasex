@@ -140,6 +140,7 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
             String image = null;
             String imageType = null;
             boolean foregroundNotification = false;
+            String sendbirdMessageType = null;
 
             Map<String, String> data = remoteMessage.getData();
 
@@ -203,9 +204,19 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                             if (title == null && sendbirdJson.contains("push_title")) {
                                 title = parseJsonString(sendbirdJson, "push_title");
                             }
+
+                            if (sendbirdJson.contains("type")) {
+                                sendbirdMessageType = parseJsonString(sendbirdJson, "type");
+                            }
+
                             if (body == null && sendbirdJson.contains("message")) {
                                 body = parseJsonString(sendbirdJson, "message");
                             }
+
+                            if (sendbirdMessageType != null && sendbirdMessageType.equals("FILE")) {
+                                body = "사진을 보냈습니다";
+                            }
+
 
                             if (title != null || body != null) {
                                 Log.d(TAG, "Sendbird push detected - title: " + title + ", body: " + body);
