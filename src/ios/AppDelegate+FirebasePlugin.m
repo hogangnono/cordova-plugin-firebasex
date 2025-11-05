@@ -49,6 +49,9 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 - (BOOL)application:(UIApplication *)application swizzledDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [self application:application swizzledDidFinishLaunchingWithOptions:launchOptions];
 
+    NSLog(@"FCM_TEST: AppDelegate didFinishLaunching started");
+    NSLog(@"SIMPLE_TEST: AppDelegate didFinishLaunching started");
+
     #if DEBUG
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"/google/firebase/debug_mode"];
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"/google/measurement/debug_mode"];
@@ -141,11 +144,14 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         }];
 
         self.applicationInBackground = @(YES);
+        NSLog(@"FCM_TEST: AppDelegate didFinishLaunching completed successfully");
 
     }@catch (NSException *exception) {
+        NSLog(@"FCM_TEST: AppDelegate didFinishLaunching failed: %@", exception.reason);
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
 
+    NSLog(@"FCM_TEST: AppDelegate didFinishLaunching returning YES");
     return YES;
 }
 
@@ -154,22 +160,40 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
+    NSLog(@"FCM_TEST: applicationDidBecomeActive - App entering foreground");
+    NSLog(@"FCM_TEST: WEBVIEW_RESTART_CHECK - notificationStack count: %lu", FirebasePlugin.firebasePlugin.notificationStack ? (unsigned long)[FirebasePlugin.firebasePlugin.notificationStack count] : 0);
+    NSLog(@"FCM_TEST: WEBVIEW_RESTART_CHECK - notificationCallbackId: %@", FirebasePlugin.firebasePlugin.notificationCallbackId ? @"SET" : @"NIL");
+
+    // 웹뷰 상태는 WKWebView delegate에서 관리됨 (webViewReady 플래그)
+    extern BOOL webViewReady;
+    NSLog(@"FCM_TEST: FOREGROUND_ENTRY - Current webViewReady: %@", webViewReady ? @"YES" : @"NO");
+
     self.applicationInBackground = @(NO);
     @try {
         [FirebasePlugin.firebasePlugin _logMessage:@"Enter foreground"];
+        NSLog(@"FCM_TEST: Executing global JS: applicationDidBecomeActive");
         [FirebasePlugin.firebasePlugin executeGlobalJavascript:@"FirebasePlugin._applicationDidBecomeActive()"];
+
+        // 글로벌 JS 실행 (웹뷰 준비 상태는 WKWebView delegate에서 관리)
+        NSLog(@"FCM_TEST: GLOBAL_JS_EXECUTED - applicationDidBecomeActive JS executed");
+
+        NSLog(@"FCM_TEST: Calling sendPendingNotifications from applicationDidBecomeActive");
         [FirebasePlugin.firebasePlugin sendPendingNotifications];
     }@catch (NSException *exception) {
+        NSLog(@"FCM_TEST: Exception in applicationDidBecomeActive: %@", exception.reason);
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
+    NSLog(@"FCM_TEST: applicationDidEnterBackground - App entering background");
     self.applicationInBackground = @(YES);
     @try {
         [FirebasePlugin.firebasePlugin _logMessage:@"Enter background"];
+        NSLog(@"FCM_TEST: Executing global JS: applicationDidEnterBackground");
         [FirebasePlugin.firebasePlugin executeGlobalJavascript:@"FirebasePlugin._applicationDidEnterBackground()"];
     }@catch (NSException *exception) {
+        NSLog(@"FCM_TEST: Exception in applicationDidEnterBackground: %@", exception.reason);
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
 }
@@ -199,11 +223,12 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
 - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
     fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
 
-    NSLog(@"📨 [AppDelegate] didReceiveRemoteNotification called");
-    NSLog(@"📨 [AppDelegate] Raw userInfo: %@", userInfo);
+    NSLog(@"FCM_TEST: didReceiveRemoteNotification called");
+    NSLog(@"FCM_TEST: App state - background: %@", self.applicationInBackground);
+    NSLog(@"FCM_TEST: Raw userInfo: %@", userInfo);
 
     if (!self.isFCMEnabled) {
-        NSLog(@"❌ [AppDelegate] FCM is not enabled");
+        NSLog(@"FCM_TEST: FCM is not enabled - returning early");
         return;
     }
 
@@ -213,36 +238,44 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         NSDictionary* aps = [mutableUserInfo objectForKey:@"aps"];
         bool isContentAvailable = false;
 
-        NSLog(@"📨 [AppDelegate] APS data: %@", aps);
+        NSLog(@"FCM_TEST: APS data: %@", aps);
 
         if([aps objectForKey:@"alert"] != nil){
+            NSLog(@"FCM_TEST: APS alert found - this is a notification message");
 
             if([aps objectForKey:@"content-available"] != nil){
                 NSNumber* contentAvailable = (NSNumber*) [aps objectForKey:@"content-available"];
                 isContentAvailable = [contentAvailable isEqualToNumber:[NSNumber numberWithInt:1]];
-                NSLog(@"📨 [AppDelegate] Content available: %@", isContentAvailable ? @"YES" : @"NO");
+                NSLog(@"FCM_TEST: Content available: %@", isContentAvailable ? @"YES" : @"NO");
             }
             [mutableUserInfo setValue:@"notification" forKey:@"messageType"];
             NSString* tap;
             if([self.applicationInBackground isEqual:[NSNumber numberWithBool:YES]] && !isContentAvailable){
                 tap = @"background";
+                NSLog(@"FCM_TEST: Setting tap to 'background' (app in background and not content-available)");
             }
             [mutableUserInfo setValue:tap forKey:@"tap"];
         }else{
+            NSLog(@"FCM_TEST: No APS alert - this is a data message");
             [mutableUserInfo setValue:@"data" forKey:@"messageType"];
         }
 
-        NSLog(@"📨 [AppDelegate] Processed userInfo: %@", mutableUserInfo);
+        NSLog(@"FCM_TEST: Processed userInfo: %@", mutableUserInfo);
         [FirebasePlugin.firebasePlugin _logMessage:[NSString stringWithFormat:@"didReceiveRemoteNotification: %@", mutableUserInfo]];
 
         completionHandler(UIBackgroundFetchResultNewData);
         if([self.applicationInBackground isEqual:[NSNumber numberWithBool:YES]] && isContentAvailable){
+            NSLog(@"FCM_TEST: Omitting foreground notification (background + content-available)");
             [FirebasePlugin.firebasePlugin _logError:@"didReceiveRemoteNotification: omitting foreground notification as content-available:1 so system notification will be shown"];
         }else{
+            NSLog(@"FCM_TEST: Processing message for foreground notification");
             [self processMessageForForegroundNotification:mutableUserInfo];
         }
         if([self.applicationInBackground isEqual:[NSNumber numberWithBool:YES]] || !isContentAvailable){
+            NSLog(@"FCM_TEST: Calling sendNotification to Firebase plugin");
             [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
+        } else {
+            NSLog(@"FCM_TEST: NOT calling sendNotification (foreground + content-available)");
         }
     }@catch (NSException *exception) {
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
@@ -380,6 +413,9 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
 
     @try{
+        NSLog(@"FCM_TEST: willPresentNotification - Notification arrived while app in foreground");
+        NSLog(@"FCM_TEST: Notification content: %@", notification.request.content.userInfo);
+        NSLog(@"FCM_TEST: Notification trigger type: %@", NSStringFromClass([notification.request.trigger class]));
 
         if (![notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class] && ![notification.request.trigger isKindOfClass:UNTimeIntervalNotificationTrigger.class]) {
             if (_prevUserNotificationCenterDelegate) {
@@ -421,7 +457,11 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         bool hasBadge = [aps objectForKey:@"badge"] != nil;
         bool hasSound = [aps objectForKey:@"sound"] != nil;
 
+        NSLog(@"FCM_TEST: showForegroundNotification: %@", showForegroundNotification ? @"YES" : @"NO");
+        NSLog(@"FCM_TEST: hasAlert: %@, hasBadge: %@, hasSound: %@", hasAlert ? @"YES" : @"NO", hasBadge ? @"YES" : @"NO", hasSound ? @"YES" : @"NO");
+
         if(showForegroundNotification){
+            NSLog(@"FCM_TEST: Will show foreground notification with specified options");
             [FirebasePlugin.firebasePlugin _logMessage:[NSString stringWithFormat:@"willPresentNotification: foreground notification alert=%@, badge=%@, sound=%@", hasAlert ? @"YES" : @"NO", hasBadge ? @"YES" : @"NO", hasSound ? @"YES" : @"NO"]];
             if(hasAlert && hasBadge && hasSound){
                 completionHandler(UNNotificationPresentationOptionAlert + UNNotificationPresentationOptionBadge + UNNotificationPresentationOptionSound);
@@ -439,11 +479,15 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
                 completionHandler(UNNotificationPresentationOptionSound);
             }
         }else{
+            NSLog(@"FCM_TEST: Not showing foreground notification (notification_foreground not set)");
             [FirebasePlugin.firebasePlugin _logMessage:@"willPresentNotification: foreground notification not set"];
         }
 
         if(![messageType isEqualToString:@"data"]){
+            NSLog(@"FCM_TEST: Calling sendNotification from willPresentNotification (messageType: %@)", messageType);
             [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
+        } else {
+            NSLog(@"FCM_TEST: Not calling sendNotification (messageType is 'data')");
         }
 
     }@catch (NSException *exception) {
@@ -458,6 +502,10 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
           withCompletionHandler:(void (^)(void))completionHandler
 {
     @try{
+        NSLog(@"FCM_TEST: PUSH_TAP - didReceiveNotificationResponse - User tapped notification");
+        NSLog(@"FCM_TEST: PUSH_TAP - Action identifier: %@", response.actionIdentifier);
+        NSLog(@"FCM_TEST: PUSH_TAP - Response userInfo: %@", response.notification.request.content.userInfo);
+        NSLog(@"FCM_TEST: PUSH_TAP - App background state: %@", self.applicationInBackground);
 
         if (![response.notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class] && ![response.notification.request.trigger isKindOfClass:UNTimeIntervalNotificationTrigger.class]) {
             if (_prevUserNotificationCenterDelegate) {
@@ -481,23 +529,30 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
         NSString* tap;
         if([self.applicationInBackground isEqual:[NSNumber numberWithBool:YES]]){
             tap = @"background";
+            NSLog(@"FCM_TEST: PUSH_TAP - Setting tap to 'background'");
         }else{
             tap = @"foreground";
-
+            NSLog(@"FCM_TEST: PUSH_TAP - Setting tap to 'foreground'");
         }
         [mutableUserInfo setValue:tap forKey:@"tap"];
         if([mutableUserInfo objectForKey:@"messageType"] == nil){
             [mutableUserInfo setValue:@"notification" forKey:@"messageType"];
+            NSLog(@"FCM_TEST: PUSH_TAP - Set messageType to 'notification'");
         }
 
         // Dynamic Actions
         if (response.actionIdentifier && ![response.actionIdentifier isEqual:UNNotificationDefaultActionIdentifier]) {
+            NSLog(@"FCM_TEST: PUSH_TAP - Adding custom action: %@", response.actionIdentifier);
             [mutableUserInfo setValue:response.actionIdentifier forKey:@"action"];
+        } else {
+            NSLog(@"FCM_TEST: PUSH_TAP - Default action (regular tap)");
         }
 
         // Print full message.
+        NSLog(@"FCM_TEST: PUSH_TAP - Final processed userInfo for notification tap: %@", mutableUserInfo);
         [FirebasePlugin.firebasePlugin _logInfo:[NSString stringWithFormat:@"didReceiveNotificationResponse: %@", mutableUserInfo]];
 
+        NSLog(@"FCM_TEST: PUSH_TAP - Calling sendNotification from didReceiveNotificationResponse");
         [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
 
         completionHandler();
