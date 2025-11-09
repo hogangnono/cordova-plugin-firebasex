@@ -78,16 +78,8 @@ static NSMutableArray* pendingGlobalJS = nil;
 
 // @override abstract
 - (void)pluginInitialize {
-    NSLog(@"SIMPLE_TEST: Firebase plugin is initializing");
-    NSLog(@"FCM_TEST: Starting Firebase plugin initialization");
-    NSLog(@"FCM_TEST: INIT_STATE_CHECK - Existing notificationStack: %@", self.notificationStack ? [NSString stringWithFormat:@"EXISTS (count: %lu)", (unsigned long)[self.notificationStack count]] : @"NIL");
-    NSLog(@"FCM_TEST: INIT_STATE_CHECK - Existing notificationCallbackId: %@", self.notificationCallbackId ? @"SET" : @"NIL");
-
     // 콜드 스타트: webView는 기본적으로 준비됨으로 가정
     // webViewReady는 이미 YES로 초기화됨 (문제 발생 시에만 NO로 설정)
-    NSLog(@"FCM_TEST: COLD_START_INIT - webViewReady: %@", webViewReady ? @"YES" : @"NO");
-
-    [self logToFile:@"Firebase plugin initialization started"];
     firebasePlugin = self;
 
     // WKWebView delegate 설정 (FirebasePlugin에서 직접 관리)
@@ -152,12 +144,8 @@ static NSMutableArray* pendingGlobalJS = nil;
         traces = [[NSMutableDictionary alloc] init];
 
         pluginInitialized = YES;
-        NSLog(@"FCM_TEST: Firebase plugin initialization completed successfully");
-        NSLog(@"FCM_TEST: immediateMessagePayloadDelivery: %@", immediateMessagePayloadDelivery ? @"YES" : @"NO");
-        NSLog(@"FCM_TEST: FCM enabled: %@", self.isFCMEnabled ? @"YES" : @"NO");
         [self executePendingGlobalJavascript];
     }@catch (NSException *exception) {
-        NSLog(@"FCM_TEST: Firebase plugin initialization failed with exception: %@", exception.reason);
         [self handlePluginExceptionWithoutContext:exception];
     }
 }
@@ -590,76 +578,48 @@ static NSMutableArray* pendingGlobalJS = nil;
 }
 
 - (void)onMessageReceived:(CDVInvokedUrlCommand *)command {
-    NSLog(@"FCM_TEST: onMessageReceived called with callbackId: %@", command.callbackId);
-    NSLog(@"FCM_TEST: WEBVIEW_STATUS_CHECK - Previous callbackId was: %@", self.notificationCallbackId ? @"SET" : @"NIL");
-    NSLog(@"FCM_TEST: WEBVIEW_STATUS_CHECK - CallbackId changed: %@",
-          [command.callbackId isEqualToString:self.notificationCallbackId ?: @""] ? @"NO (same)" : @"YES (different)");
-
     // onMessageReceived 호출 = JavaScript 엔진 + Cordova Bridge 완전 준비!
     // 이것이 didFinishNavigation보다 더 정확한 웹뷰 준비 신호
+    NSLog(@"FirebasePlugin[native]: onMessageReceived");
     extern BOOL webViewReady;
-    NSLog(@"FCM_TEST: JS_BRIDGE_READY - onMessageReceived called, webViewReady before: %@", webViewReady ? @"YES" : @"NO");
     webViewReady = YES;
-    NSLog(@"FCM_TEST: JS_BRIDGE_READY - webViewReady set to YES (JavaScript bridge confirmed working)");
-
-    [self logToFile:[NSString stringWithFormat:@"onMessageReceived called with callbackId: %@", command.callbackId]];
     self.notificationCallbackId = command.callbackId;
-    NSLog(@"FCM_TEST: notificationStack count before sendPending: %lu", (unsigned long)[self.notificationStack count]);
-    [self logToFile:[NSString stringWithFormat:@"notificationStack count: %lu", (unsigned long)[self.notificationStack count]]];
     [self sendPendingNotifications];
 }
 
 - (BOOL)isWebViewReadyForMessages {
     // WKWebView delegate 기반: 가장 정확하고 신뢰할 수 있는 방법
-    NSLog(@"FCM_TEST: WEBVIEW_READINESS - webViewReady: %@", webViewReady ? @"YES" : @"NO");
+    NSLog(@"FirebasePlugin[native]: isWebViewReadyForMessages - webViewReady: %@", webViewReady ? @"YES" : @"NO");
     return webViewReady;
 }
 
 // 외부에서 호출 가능한 대기 중인 알림 처리 메서드
 + (void)tryFlushPendingNotifications {
     if (firebasePlugin) {
-        NSLog(@"FCM_TEST: FLUSH_TRIGGERED - External flush request received");
+        NSLog(@"FirebasePlugin[native]: tryFlushPendingNotifications - FirebasePlugin initialized");
         [firebasePlugin sendPendingNotifications];
     } else {
-        NSLog(@"FCM_TEST: FLUSH_TRIGGERED - FirebasePlugin not initialized yet");
+        NSLog(@"FirebasePlugin[native]: tryFlushPendingNotifications - FirebasePlugin not initialized yet");
     }
 }
 
 - (void)sendPendingNotifications {
-    NSLog(@"FCM_TEST: sendPendingNotifications called");
-    NSLog(@"FCM_TEST: notificationCallbackId: %@", self.notificationCallbackId ? @"SET" : @"NIL");
-    NSLog(@"FCM_TEST: notificationStack: %@", self.notificationStack ? @"EXISTS" : @"NIL");
-    NSLog(@"FCM_TEST: notificationStack count: %lu", self.notificationStack ? (unsigned long)[self.notificationStack count] : 0);
-
-    // 웹뷰 준비 상태 확인
+    NSLog(@"FirebasePlugin[native]: sendPendingNotifications");
     BOOL isReady = [self isWebViewReadyForMessages];
-    NSLog(@"FCM_TEST: WEBVIEW_READY_CHECK - Result: %@", isReady ? @"YES" : @"NO");
-
     if (self.notificationCallbackId != nil && self.notificationStack != nil && [self.notificationStack count]) {
         if (isReady) {
-            NSLog(@"FCM_TEST: SAFE_SEND - WebView ready, sending %lu pending notifications", (unsigned long)[self.notificationStack count]);
             @try {
                 int notificationIndex = 0;
                 for (NSDictionary *userInfo in self.notificationStack) {
-                    NSLog(@"FCM_TEST: SAFE_SEND - Processing pending notification #%d: %@", notificationIndex++, userInfo);
                     [self sendNotification:userInfo];
                 }
-                NSLog(@"FCM_TEST: SAFE_SEND - Clearing notificationStack - removing all %lu objects", (unsigned long)[self.notificationStack count]);
                 [self.notificationStack removeAllObjects];
-                NSLog(@"FCM_TEST: SAFE_SEND - NotificationStack cleared. New count: %lu", (unsigned long)[self.notificationStack count]);
             } @catch (NSException *exception) {
-                NSLog(@"FCM_TEST: Exception in sendPendingNotifications: %@", exception.reason);
                 [self handlePluginExceptionWithoutContext:exception];
             }
-        } else {
-            NSLog(@"FCM_TEST: WAIT_FOR_WEBVIEW - WebView not ready, keeping %lu notifications in stack", (unsigned long)[self.notificationStack count]);
-            NSLog(@"FCM_TEST: WAIT_FOR_WEBVIEW - Will retry when onMessageReceived is called");
         }
     } else {
-        NSLog(@"FCM_TEST: Not sending pending notifications - conditions not met (callbackId: %@, stack: %@, count: %lu)",
-              self.notificationCallbackId ? @"SET" : @"NIL",
-              self.notificationStack ? @"EXISTS" : @"NIL",
-              self.notificationStack ? (unsigned long)[self.notificationStack count] : 0);
+        NSLog(@"FirebasePlugin[native]: sendPendingNotifications - conditions not met");
     }
 }
 
@@ -698,57 +658,30 @@ static NSMutableArray* pendingGlobalJS = nil;
 
 - (void)sendNotification:(NSDictionary *)userInfo {
     @try {
-        NSLog(@"FCM_TEST: sendNotification called with userInfo: %@", userInfo);
-        [self logToFile:[NSString stringWithFormat:@"sendNotification called - backgroundState: %@, callbackId: %@",
-                        AppDelegate.instance.applicationInBackground,
-                        self.notificationCallbackId ? @"SET" : @"NIL"]];
-        NSLog(@"FCM_TEST: App background state: %@", AppDelegate.instance.applicationInBackground);
-        NSLog(@"FCM_TEST: immediateMessagePayloadDelivery: %@", immediateMessagePayloadDelivery ? @"YES" : @"NO");
-        NSLog(@"FCM_TEST: notificationCallbackId exists: %@", self.notificationCallbackId ? @"YES" : @"NO");
-
         if([FirebasePluginMessageReceiverManager sendNotification:userInfo]){
-            NSLog(@"FCM_TEST: Message handled by custom receiver - returning early");
-            [self _logMessage:@"Message handled by custom receiver"];
+            NSLog(@"FirebasePlugin[native]: sendNotification - Message handled by custom receiver - returning early");
             return;
         }
 
-        // 업계 표준: 완전한 웹뷰 준비 상태 확인
         BOOL isReady = [self isWebViewReadyForMessages];
         BOOL shouldSendImmediately = (self.notificationCallbackId != nil &&
                                       ([AppDelegate.instance.applicationInBackground isEqual:@(NO)] || immediateMessagePayloadDelivery) &&
                                       isReady);
-        NSLog(@"FCM_TEST: Should send immediately: %@", shouldSendImmediately ? @"YES" : @"NO");
-        NSLog(@"FCM_TEST: SEND_DECISION - callbackId: %@, foreground: %@, webViewReady: %@",
-              self.notificationCallbackId ? @"YES" : @"NO",
-              [AppDelegate.instance.applicationInBackground isEqual:@(NO)] ? @"YES" : @"NO",
-              isReady ? @"YES" : @"NO");
-
         if (shouldSendImmediately) {
-            NSLog(@"FCM_TEST: IMMEDIATE_SEND - Sending notification immediately to webview via callback");
+            NSLog(@"FirebasePlugin[native]: sendNotification - IMMEDIATE_SEND - Sending notification immediately to webview via callback");
             [self sendPluginDictionaryResultAndKeepCallback:userInfo command:self.commandDelegate callbackId:self.notificationCallbackId];
         } else {
-            NSLog(@"FCM_TEST: STACK_ADD - Adding notification to stack for later delivery");
+            NSLog(@"FirebasePlugin[native]: sendNotification - STACK_ADD - Adding notification to stack for later delivery");
             if (!self.notificationStack) {
-                NSLog(@"FCM_TEST: STACK_ADD - Creating new notificationStack");
                 self.notificationStack = [[NSMutableArray alloc] init];
             }
-
-            NSLog(@"FCM_TEST: STACK_ADD - Current stack count before add: %lu", (unsigned long)[self.notificationStack count]);
-
             // stack notifications until a callback has been registered
             [self.notificationStack addObject:userInfo];
-            NSLog(@"FCM_TEST: STACK_ADD - Added notification to stack. New count: %lu", (unsigned long)[self.notificationStack count]);
-
             if ([self.notificationStack count] >= kNotificationStackSize) {
-                NSLog(@"FCM_TEST: STACK_ADD - Stack size limit reached (%d). Removing oldest notification", (int)kNotificationStackSize);
                 [self.notificationStack removeLastObject];
-                NSLog(@"FCM_TEST: STACK_ADD - Removed oldest notification. Final count: %lu", (unsigned long)[self.notificationStack count]);
             }
-
-            NSLog(@"FCM_TEST: STACK_ADD - Final notificationStack contents: %@", self.notificationStack);
         }
     }@catch (NSException *exception) {
-        NSLog(@"FCM_TEST: Exception in sendNotification: %@", exception.reason);
         [self handlePluginExceptionWithContext:exception :self.commandDelegate];
     }
 }
@@ -2868,13 +2801,9 @@ static NSMutableArray* pendingGlobalJS = nil;
 }
 
 - (void) sendPluginDictionaryResultAndKeepCallback:(NSDictionary*)result command:(CDVInvokedUrlCommand*)command callbackId:(NSString*)callbackId {
-    NSLog(@"FCM_TEST: WEBVIEW_SEND - sendPluginDictionaryResultAndKeepCallback called");
-    NSLog(@"FCM_TEST: WEBVIEW_SEND - CallbackId: %@", callbackId);
-    NSLog(@"FCM_TEST: WEBVIEW_SEND - Result data: %@", result);
     CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:result];
     [pluginResult setKeepCallbackAsBool:YES];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-    NSLog(@"FCM_TEST: WEBVIEW_SEND - Plugin result sent to webview successfully");
 }
 
 - (void) sendPluginArrayResult:(NSArray*)result command:(CDVInvokedUrlCommand*)command callbackId:(NSString*)callbackId {
@@ -3318,55 +3247,18 @@ static NSMutableArray* pendingGlobalJS = nil;
     }];
 }
 
-// File logging method for debugging
-- (void)logToFile:(NSString*)message {
-    NSString *timestamp = [NSDateFormatter localizedStringFromDate:[NSDate date]
-                                                         dateStyle:NSDateFormatterShortStyle
-                                                         timeStyle:NSDateFormatterMediumStyle];
-    NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
-
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *documentsPath = [paths objectAtIndex:0];
-    NSString *filePath = [documentsPath stringByAppendingPathComponent:@"fcm_test_log.txt"];
-
-    if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
-        [[NSFileManager defaultManager] createFileAtPath:filePath contents:nil attributes:nil];
-    }
-
-    NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:filePath];
-    [fileHandle seekToEndOfFile];
-    [fileHandle writeData:[logMessage dataUsingEncoding:NSUTF8StringEncoding]];
-    [fileHandle closeFile];
-
-    NSLog(@"FCM_FILE_LOG: %@", message);
-}
-
 #pragma mark - WKWebView Delegate Setup
 
 - (void)setupWebViewDelegate {
-    NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - Setting up WebView delegate in FirebasePlugin");
-
-    // Cordova 플러그인에서 webView 접근
     UIWebView *cordovaWebView = self.webView;
     CDVViewController *viewController = (CDVViewController *)self.viewController;
 
-    NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - CordovaWebView: %@", cordovaWebView ? @"EXISTS" : @"NIL");
-    NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - ViewController: %@", viewController ? @"EXISTS" : @"NIL");
-
     if (viewController && viewController.webView) {
-        NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - ViewController webView type: %@", NSStringFromClass([viewController.webView class]));
-
         if ([viewController.webView isKindOfClass:[WKWebView class]]) {
             WKWebView *wkWebView = (WKWebView *)viewController.webView;
             wkWebView.navigationDelegate = self;
-            NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - WKWebView navigation delegate set to FirebasePlugin");
-            NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - Current delegate: %@", wkWebView.navigationDelegate);
-        } else {
-            NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - Warning: webView is not WKWebView, type: %@", NSStringFromClass([viewController.webView class]));
         }
     } else {
-        NSLog(@"FCM_TEST: PLUGIN_DELEGATE_SETUP - Warning: Cannot access webView from viewController");
-
         // 대안: 지연된 설정 시도
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self retryWebViewDelegateSetup];
@@ -3375,15 +3267,10 @@ static NSMutableArray* pendingGlobalJS = nil;
 }
 
 - (void)retryWebViewDelegateSetup {
-    NSLog(@"FCM_TEST: PLUGIN_DELEGATE_RETRY - Retrying WebView delegate setup");
-
     CDVViewController *viewController = (CDVViewController *)self.viewController;
     if (viewController && viewController.webView && [viewController.webView isKindOfClass:[WKWebView class]]) {
         WKWebView *wkWebView = (WKWebView *)viewController.webView;
         wkWebView.navigationDelegate = self;
-        NSLog(@"FCM_TEST: PLUGIN_DELEGATE_RETRY - Success: WKWebView delegate set on retry");
-    } else {
-        NSLog(@"FCM_TEST: PLUGIN_DELEGATE_RETRY - Failed: Still cannot access WKWebView");
     }
 }
 
@@ -3391,24 +3278,17 @@ static NSMutableArray* pendingGlobalJS = nil;
 
 // 웹뷰 페이지 로딩 완료 (보완적 fallback)
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    NSLog(@"FCM_TEST: WEBVIEW_LOADED - didFinishNavigation called (page loaded)");
-    NSLog(@"FCM_TEST: WEBVIEW_LOADED - Current webViewReady: %@", webViewReady ? @"YES" : @"NO");
-
-    // 보완 로직: onMessageReceived가 호출되지 않은 경우를 대비
+    NSLog(@"FirebasePlugin[native]: webView:didFinishNavigation");
     webViewReady = YES;
 }
 
-// 웹뷰 프로세스 종료 (메모리 부족 등)
+// 웹뷰 프로세스 종료 감지 (메모리 부족 등)
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    NSLog(@"FCM_TEST: WEBVIEW_TERMINATED - webViewWebContentProcessDidTerminate called in FirebasePlugin");
     webViewReady = NO;
-    NSLog(@"FCM_TEST: WEBVIEW_TERMINATED - webViewReady set to NO, notifications will be queued");
 }
 
 // 웹뷰 로딩 실패
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    NSLog(@"FCM_TEST: WEBVIEW_ERROR - didFailNavigation: %@", error.localizedDescription);
-    // 에러 상황에서는 webViewReady를 NO로 설정
     webViewReady = NO;
 }
 
