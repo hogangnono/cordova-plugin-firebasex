@@ -4,6 +4,7 @@
 #import <Cordova/CDV.h>
 #import "AppDelegate.h"
 #import <GoogleSignIn/GoogleSignIn.h>
+@import WebKit;
 @import FirebaseMessaging;
 @import FirebaseAnalytics;
 @import FirebaseRemoteConfig;
@@ -15,8 +16,8 @@
 @import CommonCrypto;
 @import AuthenticationServices;
 
-@interface FirebasePlugin () <WKNavigationDelegate>
-@property (nonatomic, weak) id<WKNavigationDelegate> preservedNavigationDelegate;
+@interface FirebasePlugin ()
+@property (nonatomic, strong, nullable) id<NSObject> webViewProcessTerminationObserver;
 @end
 
 @implementation FirebasePlugin
@@ -86,8 +87,8 @@ static NSMutableArray* pendingGlobalJS = nil;
     // webViewReady는 이미 YES로 초기화됨 (문제 발생 시에만 NO로 설정)
     firebasePlugin = self;
 
-    // WKWebView delegate 설정 (FirebasePlugin에서 직접 관리)
-    [self setupWebViewDelegate];
+    // WKWebView 프로세스 종료 관찰 (delegate를 건드리지 않고 상태 추적)
+    [self setupWebViewMonitoring];
 
     @try {
         preferences = [NSUserDefaults standardUserDefaults];
@@ -3250,82 +3251,67 @@ static NSMutableArray* pendingGlobalJS = nil;
     }];
 }
 
-#pragma mark - WKWebView Delegate Setup
+#pragma mark - WKWebView Monitoring
 
-- (void)setupWebViewDelegate {
-    if (![self tryAttachAsNavigationDelegate]) {
-        // 대안: 지연된 설정 시도
+- (void)setupWebViewMonitoring {
+    if (![self registerWebViewProcessTerminationObserver]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self retryWebViewDelegateSetup];
+            [self retryWebViewMonitoringSetup];
         });
     }
 }
 
-- (void)retryWebViewDelegateSetup {
-    [self tryAttachAsNavigationDelegate];
+- (void)retryWebViewMonitoringSetup {
+    [self registerWebViewProcessTerminationObserver];
 }
 
-- (BOOL)tryAttachAsNavigationDelegate {
+- (WKWebView *)resolveWKWebView {
     CDVViewController *viewController = (CDVViewController *)self.viewController;
     if (viewController && viewController.webView && [viewController.webView isKindOfClass:[WKWebView class]]) {
-        WKWebView *wkWebView = (WKWebView *)viewController.webView;
-        id<WKNavigationDelegate> currentDelegate = wkWebView.navigationDelegate;
-
-        if (currentDelegate && currentDelegate != self && currentDelegate != self.preservedNavigationDelegate) {
-            self.preservedNavigationDelegate = currentDelegate;
-        }
-
-        if (wkWebView.navigationDelegate != self) {
-            wkWebView.navigationDelegate = self;
-        }
-
-        return YES;
+        return (WKWebView *)viewController.webView;
     }
 
-    return NO;
+    if ([self.webView isKindOfClass:[WKWebView class]]) {
+        return (WKWebView *)self.webView;
+    }
+
+    return nil;
 }
 
-- (void)forwardNavigationDelegateCall:(void (^)(id<WKNavigationDelegate> delegate))block {
-    id<WKNavigationDelegate> delegate = self.preservedNavigationDelegate;
-    if (!delegate || !block) {
+- (BOOL)registerWebViewProcessTerminationObserver {
+    WKWebView *wkWebView = [self resolveWKWebView];
+    if (!wkWebView) {
+        return NO;
+    }
+
+    [self unregisterWebViewProcessTerminationObserver];
+
+    NSString *terminationNotificationName = @"WKWebViewWebContentProcessDidTerminateNotification";
+
+    __weak __typeof(self) weakSelf = self;
+    self.webViewProcessTerminationObserver = [[NSNotificationCenter defaultCenter]
+        addObserverForName:terminationNotificationName
+                    object:wkWebView
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification * _Nonnull note) {
+                    [weakSelf handleWebViewProcessTermination];
+                }];
+
+    return YES;
+}
+
+- (void)unregisterWebViewProcessTerminationObserver {
+    if (!self.webViewProcessTerminationObserver) {
         return;
     }
 
-    block(delegate);
+    [[NSNotificationCenter defaultCenter] removeObserver:self.webViewProcessTerminationObserver];
+    self.webViewProcessTerminationObserver = nil;
 }
 
-#pragma mark - WKNavigationDelegate
-
-// 웹뷰 페이지 로딩 완료 (보완적 fallback)
-- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    NSLog(@"FirebasePlugin[native]: webView:didFinishNavigation");
-    webViewReady = YES;
-    [self forwardNavigationDelegateCall:^(id<WKNavigationDelegate> delegate) {
-        if ([delegate respondsToSelector:@selector(webView:didFinishNavigation:)]) {
-            [delegate webView:webView didFinishNavigation:navigation];
-        }
-    }];
-}
-
-// 웹뷰 프로세스 종료 감지 (메모리 부족 등)
-- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    NSLog(@"FirebasePlugin[native]: webViewWebContentProcessDidTerminate - WebView process terminated, setting webViewReady to NO");
+- (void)handleWebViewProcessTermination {
+    NSLog(@"FirebasePlugin[native]: WKWebView process terminated - setting webViewReady to NO");
     webViewReady = NO;
-    [self forwardNavigationDelegateCall:^(id<WKNavigationDelegate> delegate) {
-        if ([delegate respondsToSelector:@selector(webViewWebContentProcessDidTerminate:)]) {
-            [delegate webViewWebContentProcessDidTerminate:webView];
-        }
-    }];
-}
-
-// 웹뷰 로딩 실패
-- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    webViewReady = NO;
-    [self forwardNavigationDelegateCall:^(id<WKNavigationDelegate> delegate) {
-        if ([delegate respondsToSelector:@selector(webView:didFailNavigation:withError:)]) {
-            [delegate webView:webView didFailNavigation:navigation withError:error];
-        }
-    }];
 }
 
 @end
