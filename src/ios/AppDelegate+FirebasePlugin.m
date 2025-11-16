@@ -164,10 +164,6 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     NSLog(@"FCM_TEST: WEBVIEW_RESTART_CHECK - notificationStack count: %lu", FirebasePlugin.firebasePlugin.notificationStack ? (unsigned long)[FirebasePlugin.firebasePlugin.notificationStack count] : 0);
     NSLog(@"FCM_TEST: WEBVIEW_RESTART_CHECK - notificationCallbackId: %@", FirebasePlugin.firebasePlugin.notificationCallbackId ? @"SET" : @"NIL");
 
-    // 웹뷰 상태는 WKWebView delegate에서 관리됨 (webViewReady 플래그)
-    extern BOOL webViewReady;
-    NSLog(@"FCM_TEST: FOREGROUND_ENTRY - Current webViewReady: %@", webViewReady ? @"YES" : @"NO");
-
     self.applicationInBackground = @(NO);
     @try {
         [FirebasePlugin.firebasePlugin _logMessage:@"Enter foreground"];

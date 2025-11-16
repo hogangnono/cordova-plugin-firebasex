@@ -15,6 +15,10 @@
 @import CommonCrypto;
 @import AuthenticationServices;
 
+@interface FirebasePlugin () <WKNavigationDelegate>
+@property (nonatomic, weak) id<WKNavigationDelegate> preservedNavigationDelegate;
+@end
+
 @implementation FirebasePlugin
 
 @synthesize openSettingsCallbackId;
@@ -581,7 +585,6 @@ static NSMutableArray* pendingGlobalJS = nil;
     // onMessageReceived 호출 = JavaScript 엔진 + Cordova Bridge 완전 준비!
     // 이것이 didFinishNavigation보다 더 정확한 웹뷰 준비 신호
     NSLog(@"FirebasePlugin[native]: onMessageReceived");
-    extern BOOL webViewReady;
     webViewReady = YES;
     self.notificationCallbackId = command.callbackId;
     [self sendPendingNotifications];
@@ -3250,15 +3253,7 @@ static NSMutableArray* pendingGlobalJS = nil;
 #pragma mark - WKWebView Delegate Setup
 
 - (void)setupWebViewDelegate {
-    UIWebView *cordovaWebView = self.webView;
-    CDVViewController *viewController = (CDVViewController *)self.viewController;
-
-    if (viewController && viewController.webView) {
-        if ([viewController.webView isKindOfClass:[WKWebView class]]) {
-            WKWebView *wkWebView = (WKWebView *)viewController.webView;
-            wkWebView.navigationDelegate = self;
-        }
-    } else {
+    if (![self tryAttachAsNavigationDelegate]) {
         // 대안: 지연된 설정 시도
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self retryWebViewDelegateSetup];
@@ -3267,11 +3262,36 @@ static NSMutableArray* pendingGlobalJS = nil;
 }
 
 - (void)retryWebViewDelegateSetup {
+    [self tryAttachAsNavigationDelegate];
+}
+
+- (BOOL)tryAttachAsNavigationDelegate {
     CDVViewController *viewController = (CDVViewController *)self.viewController;
     if (viewController && viewController.webView && [viewController.webView isKindOfClass:[WKWebView class]]) {
         WKWebView *wkWebView = (WKWebView *)viewController.webView;
-        wkWebView.navigationDelegate = self;
+        id<WKNavigationDelegate> currentDelegate = wkWebView.navigationDelegate;
+
+        if (currentDelegate && currentDelegate != self && currentDelegate != self.preservedNavigationDelegate) {
+            self.preservedNavigationDelegate = currentDelegate;
+        }
+
+        if (wkWebView.navigationDelegate != self) {
+            wkWebView.navigationDelegate = self;
+        }
+
+        return YES;
     }
+
+    return NO;
+}
+
+- (void)forwardNavigationDelegateCall:(void (^)(id<WKNavigationDelegate> delegate))block {
+    id<WKNavigationDelegate> delegate = self.preservedNavigationDelegate;
+    if (!delegate || !block) {
+        return;
+    }
+
+    block(delegate);
 }
 
 #pragma mark - WKNavigationDelegate
@@ -3280,16 +3300,32 @@ static NSMutableArray* pendingGlobalJS = nil;
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     NSLog(@"FirebasePlugin[native]: webView:didFinishNavigation");
     webViewReady = YES;
+    [self forwardNavigationDelegateCall:^(id<WKNavigationDelegate> delegate) {
+        if ([delegate respondsToSelector:@selector(webView:didFinishNavigation:)]) {
+            [delegate webView:webView didFinishNavigation:navigation];
+        }
+    }];
 }
 
 // 웹뷰 프로세스 종료 감지 (메모리 부족 등)
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
+    NSLog(@"FirebasePlugin[native]: webViewWebContentProcessDidTerminate - WebView process terminated, setting webViewReady to NO");
     webViewReady = NO;
+    [self forwardNavigationDelegateCall:^(id<WKNavigationDelegate> delegate) {
+        if ([delegate respondsToSelector:@selector(webViewWebContentProcessDidTerminate:)]) {
+            [delegate webViewWebContentProcessDidTerminate:webView];
+        }
+    }];
 }
 
 // 웹뷰 로딩 실패
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
     webViewReady = NO;
+    [self forwardNavigationDelegateCall:^(id<WKNavigationDelegate> delegate) {
+        if ([delegate respondsToSelector:@selector(webView:didFailNavigation:withError:)]) {
+            [delegate webView:webView didFailNavigation:navigation withError:error];
+        }
+    }];
 }
 
 @end
