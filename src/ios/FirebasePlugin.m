@@ -16,8 +16,60 @@
 @import CommonCrypto;
 @import AuthenticationServices;
 
+@class FirebaseNavigationDelegateProxy;
+
 @interface FirebasePlugin ()
-@property (nonatomic, strong, nullable) id<NSObject> webViewProcessTerminationObserver;
+@property (nonatomic, strong, nullable) FirebaseNavigationDelegateProxy *navigationDelegateProxy;
+- (void)handleWebViewProcessTermination;
+@end
+
+@interface FirebaseNavigationDelegateProxy : NSObject<WKNavigationDelegate>
+@property (nonatomic, weak, nullable) id<WKNavigationDelegate> originalDelegate;
+@property (nonatomic, weak, nullable) FirebasePlugin *plugin;
+@end
+
+@implementation FirebaseNavigationDelegateProxy
+
+- (BOOL)respondsToSelector:(SEL)aSelector {
+    if (aSelector == @selector(webViewWebContentProcessDidTerminate:)) {
+        return YES;
+    }
+    return [self.originalDelegate respondsToSelector:aSelector];
+}
+
+- (id)forwardingTargetForSelector:(SEL)aSelector {
+    if (aSelector == @selector(webViewWebContentProcessDidTerminate:)) {
+        return nil; // handled here
+    }
+    if ([self.originalDelegate respondsToSelector:aSelector]) {
+        return self.originalDelegate;
+    }
+    return [super forwardingTargetForSelector:aSelector];
+}
+
+- (void)forwardInvocation:(NSInvocation *)anInvocation {
+    if ([self.originalDelegate respondsToSelector:anInvocation.selector]) {
+        [anInvocation invokeWithTarget:self.originalDelegate];
+    } else {
+        [super forwardInvocation:anInvocation];
+    }
+}
+
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector {
+    NSMethodSignature *signature = [super methodSignatureForSelector:aSelector];
+    if (!signature && [self.originalDelegate respondsToSelector:aSelector]) {
+        signature = [(NSObject *)self.originalDelegate methodSignatureForSelector:aSelector];
+    }
+    return signature;
+}
+
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView API_AVAILABLE(ios(9.0)) {
+    [self.plugin handleWebViewProcessTermination];
+    if ([self.originalDelegate respondsToSelector:@selector(webViewWebContentProcessDidTerminate:)]) {
+        [self.originalDelegate webViewWebContentProcessDidTerminate:webView];
+    }
+}
+
 @end
 
 @implementation FirebasePlugin
@@ -3254,15 +3306,11 @@ static NSMutableArray* pendingGlobalJS = nil;
 #pragma mark - WKWebView Monitoring
 
 - (void)setupWebViewMonitoring {
-    if (![self registerWebViewProcessTerminationObserver]) {
+    if (![self installNavigationDelegateProxyIfAvailable]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self retryWebViewMonitoringSetup];
+            [self setupWebViewMonitoring];
         });
     }
-}
-
-- (void)retryWebViewMonitoringSetup {
-    [self registerWebViewProcessTerminationObserver];
 }
 
 - (WKWebView *)resolveWKWebView {
@@ -3278,40 +3326,36 @@ static NSMutableArray* pendingGlobalJS = nil;
     return nil;
 }
 
-- (BOOL)registerWebViewProcessTerminationObserver {
+- (BOOL)installNavigationDelegateProxyIfAvailable {
     WKWebView *wkWebView = [self resolveWKWebView];
     if (!wkWebView) {
         return NO;
     }
 
-    [self unregisterWebViewProcessTerminationObserver];
-
-    NSString *terminationNotificationName = @"WKWebViewWebContentProcessDidTerminateNotification";
-
-    __weak __typeof(self) weakSelf = self;
-    self.webViewProcessTerminationObserver = [[NSNotificationCenter defaultCenter]
-        addObserverForName:terminationNotificationName
-                    object:wkWebView
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification * _Nonnull note) {
-                    [weakSelf handleWebViewProcessTermination];
-                }];
+    [self installNavigationDelegateProxyIfNeeded:wkWebView];
 
     return YES;
-}
-
-- (void)unregisterWebViewProcessTerminationObserver {
-    if (!self.webViewProcessTerminationObserver) {
-        return;
-    }
-
-    [[NSNotificationCenter defaultCenter] removeObserver:self.webViewProcessTerminationObserver];
-    self.webViewProcessTerminationObserver = nil;
 }
 
 - (void)handleWebViewProcessTermination {
     NSLog(@"FirebasePlugin[native]: WKWebView process terminated - setting webViewReady to NO");
     webViewReady = NO;
+}
+
+- (void)installNavigationDelegateProxyIfNeeded:(WKWebView *)webView {
+    if (!webView) {
+        return;
+    }
+
+    if ([webView.navigationDelegate isKindOfClass:[FirebaseNavigationDelegateProxy class]]) {
+        return;
+    }
+
+    FirebaseNavigationDelegateProxy *proxy = [[FirebaseNavigationDelegateProxy alloc] init];
+    proxy.originalDelegate = webView.navigationDelegate;
+    proxy.plugin = self;
+    self.navigationDelegateProxy = proxy;
+    webView.navigationDelegate = proxy;
 }
 
 @end
