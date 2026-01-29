@@ -214,7 +214,19 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                             }
 
                             if (sendbirdMessageType != null && sendbirdMessageType.equals("FILE")) {
-                                body = "사진을 보냈습니다";
+                                String fileMimeType = getSendbirdFirstFileType(sendbirdJson);
+                                if (fileMimeType != null) {
+                                    if (fileMimeType.startsWith("image/")) {
+                                        body = "사진을 보냈습니다";
+                                    } else if (fileMimeType.startsWith("video/")) {
+                                        String fileName = getSendbirdFirstFileName(sendbirdJson);
+                                        body = (fileName != null && !fileName.isEmpty()) ? fileName : "동영상을 보냈습니다";
+                                    } else {
+                                        body = "파일을 보냈습니다";
+                                    }
+                                } else {
+                                    body = "파일을 보냈습니다";
+                                }
                             }
 
 
@@ -622,4 +634,49 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
             }
         }
     }
+
+    private String getSendbirdFirstFileType(String sendbirdJson) {
+        try {
+            JSONObject jsonObject = new JSONObject(sendbirdJson);
+            if (!jsonObject.has("files")) {
+                return null;
+            }
+            JSONArray files = jsonObject.getJSONArray("files");
+            if (files == null || files.length() == 0) {
+                return null;
+            }
+            JSONObject firstFile = files.getJSONObject(0);
+            if (firstFile.has("type")) {
+                String type = firstFile.getString("type");
+                return type != null ? type.trim().toLowerCase() : null;
+            }
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing Sendbird files for type: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String getSendbirdFirstFileName(String sendbirdJson) {
+        try {
+            JSONObject jsonObject = new JSONObject(sendbirdJson);
+            if (!jsonObject.has("files")) {
+                return null;
+            }
+            JSONArray files = jsonObject.getJSONArray("files");
+            if (files == null || files.length() == 0) {
+                return null;
+            }
+            JSONObject firstFile = files.getJSONObject(0);
+            if (firstFile.has("name")) {
+                String name = firstFile.getString("name");
+                return name != null ? decodeStringValue(name.trim()) : null;
+            }
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing Sendbird files for name: " + e.getMessage());
+            return null;
+        }
+    }
+
 }
