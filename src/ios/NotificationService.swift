@@ -26,6 +26,9 @@ class NotificationService: UNNotificationServiceExtension {
         // 타임아웃 방지를 위한 빠른 처리 (25초 제한)
         let startTime = Date()
 
+        // Sendbird FILE 타입 title/body 보정
+        applySendbirdOverrides(userInfo: userInfo, content: content)
+
         // 이미지 첨부 처리
         processImageAttachments(userInfo: userInfo, content: content) { [weak self] in
 
@@ -41,11 +44,53 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
 
+    // MARK: - Sendbird FILE 타입 title/body 보정
     override func serviceExtensionTimeWillExpire() {
         if let contentHandler = contentHandler, let content = self.bestAttemptContent {
             contentHandler(content)
         }
     }
+
+        private func applySendbirdOverrides(userInfo: [AnyHashable: Any], content: UNMutableNotificationContent) {
+        guard let sendbirdJson = userInfo["sendbird"] as? String,
+              !sendbirdJson.isEmpty,
+              let data = sendbirdJson.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data),
+              let sendbird = parsed as? [String: Any] else { return }
+
+        if content.title.isEmpty, let pushTitle = sendbird["push_title"] as? String, !pushTitle.isEmpty {
+            content.title = pushTitle
+        }
+
+        guard let type = sendbird["type"] as? String, type == "FILE" else {
+            if content.body.isEmpty, let message = sendbird["message"] as? String, !message.isEmpty {
+                content.body = message
+            }
+            return
+        }
+
+        var fileType: String?
+        var fileName: String?
+        if let files = sendbird["files"] as? [[String: Any]], let first = files.first {
+            fileType = first["type"] as? String
+            fileName = first["name"] as? String
+        }
+
+        let mime = (fileType ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !mime.isEmpty {
+            if mime.hasPrefix("image/") {
+                content.body = "사진을 보냈습니다"
+            } else if mime.hasPrefix("video/") {
+                let name = (fileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                content.body = name.isEmpty ? "동영상을 보냈습니다" : name
+            } else {
+                content.body = "파일을 보냈습니다"
+            }
+        } else {
+            content.body = "파일을 보냈습니다"
+        }
+    }
+
 
     // MARK: - 이미지 첨부 처리
 

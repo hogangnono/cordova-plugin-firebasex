@@ -249,6 +249,61 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     }
 }
 
+// Sendbird payload에서 FILE 타입일 때 title/body 보정 (image → 사진, video → 파일명 등)
+-(void)applySendbirdOverridesToTitle:(NSString **)titleRef body:(NSString **)bodyRef fromMessageData:(NSDictionary *)messageData {
+    NSString *sendbirdJson = [messageData objectForKey:@"sendbird"];
+    if (!sendbirdJson || ![sendbirdJson isKindOfClass:[NSString class]]) return;
+
+    NSError *err = nil;
+    NSData *data = [sendbirdJson dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *sendbird = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
+    if (err || !sendbird || ![sendbird isKindOfClass:[NSDictionary class]]) return;
+
+    if (*titleRef == nil) {
+        id pushTitle = [sendbird objectForKey:@"push_title"];
+        if ([pushTitle isKindOfClass:[NSString class]] && [(NSString *)pushTitle length] > 0) {
+            *titleRef = (NSString *)pushTitle;
+        }
+    }
+
+    NSString *type = [sendbird objectForKey:@"type"];
+    if ([type isEqualToString:@"FILE"]) {
+        NSArray *files = [sendbird objectForKey:@"files"];
+        NSString *fileType = nil;
+        NSString *fileName = nil;
+        if ([files isKindOfClass:[NSArray class]] && [files count] > 0) {
+            id first = [files objectAtIndex:0];
+            if ([first isKindOfClass:[NSDictionary class]]) {
+                NSDictionary *firstFile = (NSDictionary *)first;
+                fileType = [firstFile objectForKey:@"type"];
+                fileName = [firstFile objectForKey:@"name"];
+            }
+        }
+        NSString *mime = ([fileType isKindOfClass:[NSString class]] && [(NSString *)fileType length] > 0)
+            ? [[(NSString *)fileType lowercaseString] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+            : nil;
+        if (mime != nil) {
+            if ([mime hasPrefix:@"image/"]) {
+                *bodyRef = @"사진을 보냈습니다";
+            } else if ([mime hasPrefix:@"video/"]) {
+                NSString *name = ([fileName isKindOfClass:[NSString class]] && [(NSString *)fileName length] > 0)
+                    ? [(NSString *)fileName stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                    : nil;
+                *bodyRef = (name != nil && [name length] > 0) ? name : @"동영상을 보냈습니다";
+            } else {
+                *bodyRef = @"파일을 보냈습니다";
+            }
+        } else {
+            *bodyRef = @"파일을 보냈습니다";
+        }
+    } else if (*bodyRef == nil) {
+        id msg = [sendbird objectForKey:@"message"];
+        if ([msg isKindOfClass:[NSString class]] && [(NSString *)msg length] > 0) {
+            *bodyRef = (NSString *)msg;
+        }
+    }
+}
+
 // Scans a message for keys which indicate a notification should be shown.
 // If found, extracts relevant keys and uses then to display a local notification
 -(void)processMessageForForegroundNotification:(NSDictionary*)messageData {
@@ -297,6 +352,8 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     if(title == nil || body == nil){
         return;
     }
+
+    [self applySendbirdOverridesToTitle:&title body:&body fromMessageData:messageData];
 
     [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
         @try{
