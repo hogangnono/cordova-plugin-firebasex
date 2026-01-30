@@ -4,6 +4,7 @@
 #import <Cordova/CDV.h>
 #import "AppDelegate.h"
 #import <GoogleSignIn/GoogleSignIn.h>
+@import WebKit;
 @import FirebaseMessaging;
 @import FirebaseAnalytics;
 @import FirebaseRemoteConfig;
@@ -14,6 +15,62 @@
 @import UserNotifications;
 @import CommonCrypto;
 @import AuthenticationServices;
+
+@class FirebaseNavigationDelegateProxy;
+
+@interface FirebasePlugin ()
+@property (nonatomic, strong, nullable) FirebaseNavigationDelegateProxy *navigationDelegateProxy;
+- (void)handleWebViewProcessTermination;
+@end
+
+@interface FirebaseNavigationDelegateProxy : NSObject<WKNavigationDelegate>
+@property (nonatomic, weak, nullable) id<WKNavigationDelegate> originalDelegate;
+@property (nonatomic, weak, nullable) FirebasePlugin *plugin;
+@end
+
+@implementation FirebaseNavigationDelegateProxy
+
+- (BOOL)respondsToSelector:(SEL)aSelector {
+    if (aSelector == @selector(webViewWebContentProcessDidTerminate:)) {
+        return YES;
+    }
+    return [self.originalDelegate respondsToSelector:aSelector];
+}
+
+- (id)forwardingTargetForSelector:(SEL)aSelector {
+    if (aSelector == @selector(webViewWebContentProcessDidTerminate:)) {
+        return nil; // handled here
+    }
+    if ([self.originalDelegate respondsToSelector:aSelector]) {
+        return self.originalDelegate;
+    }
+    return [super forwardingTargetForSelector:aSelector];
+}
+
+- (void)forwardInvocation:(NSInvocation *)anInvocation {
+    if ([self.originalDelegate respondsToSelector:anInvocation.selector]) {
+        [anInvocation invokeWithTarget:self.originalDelegate];
+    } else {
+        [super forwardInvocation:anInvocation];
+    }
+}
+
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector {
+    NSMethodSignature *signature = [super methodSignatureForSelector:aSelector];
+    if (!signature && [self.originalDelegate respondsToSelector:aSelector]) {
+        signature = [(NSObject *)self.originalDelegate methodSignatureForSelector:aSelector];
+    }
+    return signature;
+}
+
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView API_AVAILABLE(ios(9.0)) {
+    [self.plugin handleWebViewProcessTermination];
+    if ([self.originalDelegate respondsToSelector:@selector(webViewWebContentProcessDidTerminate:)]) {
+        [self.originalDelegate webViewWebContentProcessDidTerminate:webView];
+    }
+}
+
+@end
 
 @implementation FirebasePlugin
 
@@ -44,6 +101,7 @@ static BOOL pluginInitialized = NO;
 static BOOL registeredForRemoteNotifications = NO;
 static BOOL openSettingsEmitted = NO;
 static BOOL immediateMessagePayloadDelivery = NO;
+BOOL webViewReady = YES;  // 기본적으로 준비됨으로 가정 (optimistic approach)
 static NSMutableDictionary* authCredentials;
 static NSString* currentNonce; // used for Apple Sign In
 static FIRFirestore* firestore;
@@ -77,8 +135,12 @@ static NSMutableArray* pendingGlobalJS = nil;
 
 // @override abstract
 - (void)pluginInitialize {
-    NSLog(@"Starting Firebase plugin");
+    // 콜드 스타트: webView는 기본적으로 준비됨으로 가정
+    // webViewReady는 이미 YES로 초기화됨 (문제 발생 시에만 NO로 설정)
     firebasePlugin = self;
+
+    // WKWebView 프로세스 종료 관찰 (delegate를 건드리지 않고 상태 추적)
+    [self setupWebViewMonitoring];
 
     @try {
         preferences = [NSUserDefaults standardUserDefaults];
@@ -573,20 +635,47 @@ static NSMutableArray* pendingGlobalJS = nil;
 }
 
 - (void)onMessageReceived:(CDVInvokedUrlCommand *)command {
+    // onMessageReceived 호출 = JavaScript 엔진 + Cordova Bridge 완전 준비!
+    // 이것이 didFinishNavigation보다 더 정확한 웹뷰 준비 신호
+    NSLog(@"FirebasePlugin[native]: onMessageReceived");
+    webViewReady = YES;
     self.notificationCallbackId = command.callbackId;
     [self sendPendingNotifications];
 }
 
+- (BOOL)isWebViewReadyForMessages {
+    // WKWebView delegate 기반: 가장 정확하고 신뢰할 수 있는 방법
+    NSLog(@"FirebasePlugin[native]: isWebViewReadyForMessages - webViewReady: %@", webViewReady ? @"YES" : @"NO");
+    return webViewReady;
+}
+
+// 외부에서 호출 가능한 대기 중인 알림 처리 메서드
++ (void)tryFlushPendingNotifications {
+    if (firebasePlugin) {
+        NSLog(@"FirebasePlugin[native]: tryFlushPendingNotifications - FirebasePlugin initialized");
+        [firebasePlugin sendPendingNotifications];
+    } else {
+        NSLog(@"FirebasePlugin[native]: tryFlushPendingNotifications - FirebasePlugin not initialized yet");
+    }
+}
+
 - (void)sendPendingNotifications {
+    NSLog(@"FirebasePlugin[native]: sendPendingNotifications");
+    BOOL isReady = [self isWebViewReadyForMessages];
     if (self.notificationCallbackId != nil && self.notificationStack != nil && [self.notificationStack count]) {
-        @try {
-            for (NSDictionary *userInfo in self.notificationStack) {
-                [self sendNotification:userInfo];
+        if (isReady) {
+            @try {
+                int notificationIndex = 0;
+                for (NSDictionary *userInfo in self.notificationStack) {
+                    [self sendNotification:userInfo];
+                }
+                [self.notificationStack removeAllObjects];
+            } @catch (NSException *exception) {
+                [self handlePluginExceptionWithoutContext:exception];
             }
-            [self.notificationStack removeAllObjects];
-        } @catch (NSException *exception) {
-            [self handlePluginExceptionWithoutContext:exception];
         }
+    } else {
+        NSLog(@"FirebasePlugin[native]: sendPendingNotifications - conditions not met");
     }
 }
 
@@ -626,19 +715,24 @@ static NSMutableArray* pendingGlobalJS = nil;
 - (void)sendNotification:(NSDictionary *)userInfo {
     @try {
         if([FirebasePluginMessageReceiverManager sendNotification:userInfo]){
-            [self _logMessage:@"Message handled by custom receiver"];
+            NSLog(@"FirebasePlugin[native]: sendNotification - Message handled by custom receiver - returning early");
             return;
         }
-        if (self.notificationCallbackId != nil && ([AppDelegate.instance.applicationInBackground isEqual:@(NO)] || immediateMessagePayloadDelivery )) {
+
+        BOOL isReady = [self isWebViewReadyForMessages];
+        BOOL shouldSendImmediately = (self.notificationCallbackId != nil &&
+                                      ([AppDelegate.instance.applicationInBackground isEqual:@(NO)] || immediateMessagePayloadDelivery) &&
+                                      isReady);
+        if (shouldSendImmediately) {
+            NSLog(@"FirebasePlugin[native]: sendNotification - IMMEDIATE_SEND - Sending notification immediately to webview via callback");
             [self sendPluginDictionaryResultAndKeepCallback:userInfo command:self.commandDelegate callbackId:self.notificationCallbackId];
         } else {
+            NSLog(@"FirebasePlugin[native]: sendNotification - STACK_ADD - Adding notification to stack for later delivery");
             if (!self.notificationStack) {
                 self.notificationStack = [[NSMutableArray alloc] init];
             }
-
             // stack notifications until a callback has been registered
             [self.notificationStack addObject:userInfo];
-
             if ([self.notificationStack count] >= kNotificationStackSize) {
                 [self.notificationStack removeLastObject];
             }
@@ -3207,6 +3301,61 @@ static NSMutableArray* pendingGlobalJS = nil;
         CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:@"Notification categories setup successfully"];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }];
+}
+
+#pragma mark - WKWebView Monitoring
+
+- (void)setupWebViewMonitoring {
+    if (![self installNavigationDelegateProxyIfAvailable]) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self setupWebViewMonitoring];
+        });
+    }
+}
+
+- (WKWebView *)resolveWKWebView {
+    CDVViewController *viewController = (CDVViewController *)self.viewController;
+    if (viewController && viewController.webView && [viewController.webView isKindOfClass:[WKWebView class]]) {
+        return (WKWebView *)viewController.webView;
+    }
+
+    if ([self.webView isKindOfClass:[WKWebView class]]) {
+        return (WKWebView *)self.webView;
+    }
+
+    return nil;
+}
+
+- (BOOL)installNavigationDelegateProxyIfAvailable {
+    WKWebView *wkWebView = [self resolveWKWebView];
+    if (!wkWebView) {
+        return NO;
+    }
+
+    [self installNavigationDelegateProxyIfNeeded:wkWebView];
+
+    return YES;
+}
+
+- (void)handleWebViewProcessTermination {
+    NSLog(@"FirebasePlugin[native]: WKWebView process terminated - setting webViewReady to NO");
+    webViewReady = NO;
+}
+
+- (void)installNavigationDelegateProxyIfNeeded:(WKWebView *)webView {
+    if (!webView) {
+        return;
+    }
+
+    if ([webView.navigationDelegate isKindOfClass:[FirebaseNavigationDelegateProxy class]]) {
+        return;
+    }
+
+    FirebaseNavigationDelegateProxy *proxy = [[FirebaseNavigationDelegateProxy alloc] init];
+    proxy.originalDelegate = webView.navigationDelegate;
+    proxy.plugin = self;
+    self.navigationDelegateProxy = proxy;
+    webView.navigationDelegate = proxy;
 }
 
 @end
