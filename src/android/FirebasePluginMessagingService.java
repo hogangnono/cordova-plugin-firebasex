@@ -203,7 +203,7 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                         String sendbirdJson = data.get("sendbird");
                         if (sendbirdJson != null) {
                             if (title == null) {
-                                if (sendbirdJson.contains("push_title")) {
+                                if (parseJsonString(sendbirdJson, "push_title") != null) {
                                     title = parseJsonString(sendbirdJson, "push_title");
                                 } else {
                                     title = getApplicationInfo().loadLabel(getPackageManager()).toString();
@@ -538,7 +538,7 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
     private String parseJsonString(String jsonString, String key) {
         try {
             JSONObject jsonObject = new JSONObject(jsonString);
-            if (jsonObject.has(key)) {
+            if (jsonObject.has(key) && !jsonObject.isNull(key)) {
                 String value = jsonObject.getString(key);
                 return decodeStringValue(value);
             }
