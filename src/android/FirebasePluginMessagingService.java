@@ -202,8 +202,12 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
                     try {
                         String sendbirdJson = data.get("sendbird");
                         if (sendbirdJson != null) {
-                            if (title == null && sendbirdJson.contains("push_title")) {
-                                title = parseJsonString(sendbirdJson, "push_title");
+                            if (title == null) {
+                                if (sendbirdJson.contains("push_title")) {
+                                    title = parseJsonString(sendbirdJson, "push_title");
+                                } else {
+                                    title = getApplicationInfo().loadLabel(getPackageManager()).toString();
+                                }
                             }
 
                             if (sendbirdJson.contains("type")) {
