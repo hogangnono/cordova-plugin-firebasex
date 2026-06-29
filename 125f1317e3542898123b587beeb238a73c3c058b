@@ -1,0 +1,15 @@
+package.json
+  h_4bf044226b949e 3
+plugin.xml
+  h_4bf044226b949e 184-196
+---
+{
+  "schema_version": "zax-attestation/1.1.0",
+  "base_commit_sha": "125f1317e3542898123b587beeb238a73c3c058b",
+  "prompts": {},
+  "humans": {
+    "h_4bf044226b949e": {
+      "author": "rad@zigbang.com"
+    }
+  }
+}
