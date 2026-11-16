@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<plugin id="cordova-plugin-firebasex" version="18.1.1-hogangnono"
+<plugin id="cordova-plugin-firebasex" version="18.1.5-hogangnono"
 	xmlns="http://apache.org/cordova/ns/plugins/1.0"
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:tools="http://schemas.android.com/tools"
@@ -181,19 +181,19 @@
 				<source url="https://cdn.cocoapods.org/"/>
 			</config>
 			<pods use-frameworks="true">
-				<pod name="FirebaseCore" spec="11.8.0"/>
-				<pod name="FirebaseCoreExtension" spec="11.8.0"/>
-				<pod name="FirebaseAuth" spec="11.8.1"/>
-				<pod name="FirebaseAnalytics" spec="11.8.0"/>
-				<!--<pod name="FirebaseAnalyticsOnDeviceConversion" spec="11.8.0"/>-->
-				<pod name="FirebaseMessaging" spec="11.8.0"/>
-				<pod name="FirebasePerformance" spec="11.8.0"/>
-				<pod name="FirebaseRemoteConfig" spec="11.8.0"/>
-				<pod name="FirebaseInAppMessaging" spec="11.8.0-beta"/>
-				<pod name="FirebaseFirestore" spec="11.8.0"/>
-				<pod name="FirebaseCrashlytics" spec="11.8.0"/>
-				<pod name="FirebaseFunctions" spec="11.8.0"/>
-				<pod name="FirebaseInstallations" spec="11.8.0"/>
+				<pod name="FirebaseCore" spec="11.14.0"/>
+				<pod name="FirebaseCoreExtension" spec="11.14.0"/>
+				<pod name="FirebaseAuth" spec="11.14.0"/>
+				<pod name="FirebaseAnalytics" spec="11.14.0"/>
+				<!--<pod name="FirebaseAnalyticsOnDeviceConversion" spec="11.14.0"/>-->
+				<pod name="FirebaseMessaging" spec="11.14.0"/>
+				<pod name="FirebasePerformance" spec="11.14.0"/>
+				<pod name="FirebaseRemoteConfig" spec="11.14.0"/>
+				<pod name="FirebaseInAppMessaging" spec="11.14.0-beta"/>
+				<pod name="FirebaseFirestore" spec="11.14.0"/>
+				<pod name="FirebaseCrashlytics" spec="11.14.0"/>
+				<pod name="FirebaseFunctions" spec="11.14.0"/>
+				<pod name="FirebaseInstallations" spec="11.14.0"/>
 				<pod name="GoogleSignIn" spec="7.1.0"/>
 				<pod name="GoogleTagManager" spec="8.0.0"/>
 			</pods>
