@@ -938,7 +938,7 @@ end
             "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
             "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
             "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
-            "IPHONEOS_DEPLOYMENT_TARGET": "13.0", // KakaoSDK 호환성을 위해 13.0으로 설정
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0", // Firebase iOS SDK 12.x 최소 지원 버전(15.0)에 맞춤
             "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
             "MARKETING_VERSION": "1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
@@ -1130,7 +1130,7 @@ end
             "INFOPLIST_FILE": "\"" + appName + "/" + extensionName + "/Info.plist\"",
             "INFOPLIST_KEY_CFBundleDisplayName": "\"" + extensionName + "\"",
             "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",
-            "IPHONEOS_DEPLOYMENT_TARGET": "13.0", // KakaoSDK 호환성을 위해 13.0으로 설정
+            "IPHONEOS_DEPLOYMENT_TARGET": "15.0", // Firebase iOS SDK 12.x 최소 지원 버전(15.0)에 맞춤
             "LD_RUNPATH_SEARCH_PATHS": "\"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks\"",
             "MARKETING_VERSION": "1.0",
             "PRODUCT_BUNDLE_IDENTIFIER": extensionBundleId,
@@ -1573,11 +1573,11 @@ end
     },
 
     /**
-     * 모든 타겟(메인 앱 + Extension들)에 Swift 5.0과 iOS 13.0을 설정합니다.
+     * 모든 타겟(메인 앱 + Extension들)에 Swift 5.0과 iOS 15.0을 설정합니다.
      */
     ensureSwiftVersionForAllTargets: function(xcodeProject, appName) {
         try {
-            utilities.log("Setting Swift 5.0 and iOS 13.0 for all targets...");
+            utilities.log("Setting Swift 5.0 and iOS 15.0 for all targets...");
 
             // XCode 프로젝트 기본 구조 검증
             if (!xcodeProject || !xcodeProject.hash || !xcodeProject.hash.project || !xcodeProject.hash.project.objects) {
@@ -1611,7 +1611,7 @@ end
                         continue;
                     }
 
-                    utilities.log("Setting Swift 5.0 and iOS 13.0 for target: " + target.name);
+                    utilities.log("Setting Swift 5.0 and iOS 15.0 for target: " + target.name);
 
                     // 해당 타겟의 Build Configurations 찾기
                     var configListId = target.buildConfigurationList;
@@ -1635,15 +1635,15 @@ end
 
                             if (config && config.buildSettings) {
                                 config.buildSettings["SWIFT_VERSION"] = "5.0";
-                                // KakaoSDK 호환성을 위해 모든 타겟을 iOS 13.0으로 설정
-                                config.buildSettings["IPHONEOS_DEPLOYMENT_TARGET"] = "13.0";
+                                // Firebase iOS SDK 12.x 최소 지원 버전(15.0)에 맞춰 모든 타겟을 iOS 15.0으로 설정
+                                config.buildSettings["IPHONEOS_DEPLOYMENT_TARGET"] = "15.0";
                             }
                         });
                     }
                 }
             }
 
-            utilities.log("Swift 5.0 and iOS 13.0 set for all targets successfully");
+            utilities.log("Swift 5.0 and iOS 15.0 set for all targets successfully");
         } catch (error) {
             utilities.error("Failed to set Swift version: " + error.message);
             // 에러가 발생해도 계속 진행
